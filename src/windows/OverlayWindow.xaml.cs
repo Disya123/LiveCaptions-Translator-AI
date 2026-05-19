@@ -117,9 +117,31 @@ namespace LiveCaptionsTranslator
 
         private void OnStreamingStarted()
         {
+            string remaining = string.Empty;
             lock (_chunkLock)
             {
-                _charQueue.Clear();
+                if (_charQueue.Count > 0)
+                {
+                    var sb = new StringBuilder();
+                    while (_charQueue.Count > 0)
+                    {
+                        sb.Append(_charQueue.Dequeue());
+                    }
+                    remaining = sb.ToString();
+                }
+            }
+
+            if (!string.IsNullOrEmpty(remaining))
+            {
+                Dispatcher.Invoke(() =>
+                {
+                    var activeBlocks = Translator.Caption.ActiveSubtitles;
+                    if (activeBlocks.Count > 0)
+                    {
+                        var lastBlock = activeBlocks[activeBlocks.Count - 1];
+                        lastBlock.Text += remaining;
+                    }
+                });
             }
         }
 
