@@ -287,6 +287,7 @@ namespace LiveCaptionsTranslator
                 Caption.TranslatedCaption = string.Empty;
                 Caption.DisplayTranslatedCaption = string.Empty;
                 Caption.OverlayCurrentTranslation = string.Empty;
+                Caption.PrepareForNewBlock();
             };
             // Note: ChunkReceived is handled by OverlayWindow with throttling and color animation.
 
