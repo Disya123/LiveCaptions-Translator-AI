@@ -60,7 +60,12 @@ namespace LiveCaptionsTranslator
             DataContext = Translator.Caption;
 
             Loaded += (s, e) => Translator.Caption.PropertyChanged += TranslatedChanged;
-            Unloaded += (s, e) => Translator.Caption.PropertyChanged -= TranslatedChanged;
+            Unloaded += (s, e) =>
+            {
+                Translator.Caption.PropertyChanged -= TranslatedChanged;
+                Translator.TranslationTaskQueue.ChunkReceived -= OnChunkReceived;
+                Translator.TranslationTaskQueue.StreamingStarted -= OnStreamingStarted;
+            };
 
             OriginalCaption.FontWeight = Translator.Setting.OverlayWindow.FontBold == Utils.FontBold.Both ?
                 FontWeights.Bold : FontWeights.Regular;
@@ -462,7 +467,6 @@ namespace LiveCaptionsTranslator
             Dispatcher.BeginInvoke(new Action(() =>
             {
                 OriginalCaption.FontSize = Translator.Setting.OverlayWindow.FontSize;
-                TranslatedCaption.FontSize = (int)(OriginalCaption.FontSize * 1.25);
             }), DispatcherPriority.Background);
         }
 

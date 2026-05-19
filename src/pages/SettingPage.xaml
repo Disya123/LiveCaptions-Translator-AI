@@ -300,16 +300,19 @@
 
         <!-- TTS Settings Row -->
         <ui:CardExpander Grid.Row="1" Grid.ColumnSpan="5" Margin="15,20,15,0" Icon="{ui:SymbolIcon Speaker224}" Header="Text-to-Speech (TTS) Settings">
-            <StackPanel Orientation="Vertical">
-                <StackPanel Orientation="Horizontal" Margin="0,0,0,10">
-                    <TextBlock Text="TTS Engine: " VerticalAlignment="Center" Margin="0,0,10,0"/>
-                    <ComboBox Width="150" SelectedItem="{Binding TTSEngine, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}">
+            <StackPanel Orientation="Vertical" Margin="10,0,10,0">
+                <StackPanel Orientation="Horizontal" Margin="0,0,0,15">
+                    <TextBlock Text="TTS Engine: " VerticalAlignment="Center" FontWeight="Bold" Margin="0,0,10,0"/>
+                    <ComboBox Width="150" Height="30" Padding="10,4,10,7" FontSize="13.3"
+                              SelectedValue="{Binding TTSEngine, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                              SelectedValuePath="Content">
                         <ComboBoxItem Content="None" />
                         <ComboBoxItem Content="OpenAI" />
                         <ComboBoxItem Content="Google" />
                     </ComboBox>
                 </StackPanel>
 
+                <!-- OpenAI TTS Configuration -->
                 <StackPanel>
                     <StackPanel.Style>
                         <Style TargetType="StackPanel">
@@ -321,14 +324,41 @@
                             </Style.Triggers>
                         </Style>
                     </StackPanel.Style>
-                    <ui:TextBox Margin="0,0,0,5" PlaceholderText="API URL" Text="{Binding OpenAITTSConfig.ApiUrl, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
-                    <ui:PasswordBox Margin="0,0,0,5" PlaceholderText="API Key" PasswordChar="*" Text="{Binding OpenAITTSConfig.ApiKey, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
-                    <StackPanel Orientation="Horizontal" Margin="0,0,0,5">
-                        <ui:TextBox Width="150" Margin="0,0,10,0" PlaceholderText="Model (tts-1)" Text="{Binding OpenAITTSConfig.Model, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
-                        <ui:TextBox Width="150" PlaceholderText="Voice (alloy)" Text="{Binding OpenAITTSConfig.Voice, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
-                    </StackPanel>
+                    
+                    <TextBlock Text="OpenAI TTS Configuration" FontWeight="Bold" FontSize="14" Margin="0,0,0,10"/>
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                        </Grid.RowDefinitions>
+                        
+                        <StackPanel Grid.Row="0" Grid.Column="0" Margin="0,0,10,10">
+                            <TextBlock Margin="2.5,0,0,5" Text="API Key" FontSize="12" Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+                            <ui:PasswordBox PasswordChar="*" Text="{Binding OpenAITTSConfig.ApiKey, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                        </StackPanel>
+                        
+                        <StackPanel Grid.Row="0" Grid.Column="1" Margin="10,0,0,10">
+                            <TextBlock Margin="2.5,0,0,5" Text="API URL" FontSize="12" Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+                            <ui:TextBox Text="{Binding OpenAITTSConfig.ApiUrl, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                        </StackPanel>
+                        
+                        <StackPanel Grid.Row="1" Grid.Column="0" Margin="0,0,10,0">
+                            <TextBlock Margin="2.5,0,0,5" Text="Model (e.g., tts-1)" FontSize="12" Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+                            <ui:TextBox Text="{Binding OpenAITTSConfig.Model, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                        </StackPanel>
+                        
+                        <StackPanel Grid.Row="1" Grid.Column="1" Margin="10,0,0,0">
+                            <TextBlock Margin="2.5,0,0,5" Text="Voice (e.g., alloy)" FontSize="12" Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+                            <ui:TextBox Text="{Binding OpenAITTSConfig.Voice, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                        </StackPanel>
+                    </Grid>
                 </StackPanel>
 
+                <!-- Google TTS Configuration -->
                 <StackPanel>
                     <StackPanel.Style>
                         <Style TargetType="StackPanel">
@@ -340,11 +370,33 @@
                             </Style.Triggers>
                         </Style>
                     </StackPanel.Style>
-                    <ui:PasswordBox Margin="0,0,0,5" PlaceholderText="API Key" PasswordChar="*" Text="{Binding GoogleTTSConfig.ApiKey, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
-                    <StackPanel Orientation="Horizontal" Margin="0,0,0,5">
-                        <ui:TextBox Width="200" Margin="0,0,10,0" PlaceholderText="Voice Name (en-US-Wavenet-D)" Text="{Binding GoogleTTSConfig.VoiceName, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
-                        <ui:TextBox Width="150" PlaceholderText="Language Code (en-US)" Text="{Binding GoogleTTSConfig.LanguageCode, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
-                    </StackPanel>
+                    
+                    <TextBlock Text="Google TTS Configuration" FontWeight="Bold" FontSize="14" Margin="0,0,0,10"/>
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                        </Grid.RowDefinitions>
+                        
+                        <StackPanel Grid.Row="0" Grid.Column="0" Grid.ColumnSpan="2" Margin="0,0,0,10">
+                            <TextBlock Margin="2.5,0,0,5" Text="API Key" FontSize="12" Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+                            <ui:PasswordBox PasswordChar="*" Text="{Binding GoogleTTSConfig.ApiKey, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                        </StackPanel>
+                        
+                        <StackPanel Grid.Row="1" Grid.Column="0" Margin="0,0,10,0">
+                            <TextBlock Margin="2.5,0,0,5" Text="Voice Name (e.g., en-US-Wavenet-D)" FontSize="12" Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+                            <ui:TextBox Text="{Binding GoogleTTSConfig.VoiceName, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                        </StackPanel>
+                        
+                        <StackPanel Grid.Row="1" Grid.Column="1" Margin="10,0,0,0">
+                            <TextBlock Margin="2.5,0,0,5" Text="Language Code (e.g., en-US)" FontSize="12" Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+                            <ui:TextBox Text="{Binding GoogleTTSConfig.LanguageCode, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                        </StackPanel>
+                    </Grid>
                 </StackPanel>
             </StackPanel>
         </ui:CardExpander>

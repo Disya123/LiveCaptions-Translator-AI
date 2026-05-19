@@ -79,21 +79,22 @@
                                         Stroke="Black" 
                                         StrokeThickness="{Binding StrokeThickness, ElementName=OriginalCaptionDecorator}">
                                         <TextBlock Text="{Binding Text}" 
-                                                   Foreground="{Binding Foreground}">
+                                                   Foreground="{Binding Foreground}"
+                                                   FontSize="{Binding TranslationFontSize, Source={x:Static local:Translator.Caption}}">
                                             <TextBlock.Style>
                                                 <Style TargetType="TextBlock" BasedOn="{StaticResource CaptionBlockStyle}">
                                                     <Setter Property="Opacity" Value="1.0"/>
                                                     <Style.Triggers>
                                                         <DataTrigger Binding="{Binding IsFadingOut}" Value="True">
                                                             <DataTrigger.EnterActions>
-                                                                <BeginStoryboard>
+                                                                 <BeginStoryboard>
                                                                     <Storyboard>
                                                                         <DoubleAnimation Storyboard.TargetProperty="Opacity"
                                                                                          To="0.0" 
                                                                                          Duration="0:0:1.5" 
                                                                                          FillBehavior="HoldEnd"/>
                                                                     </Storyboard>
-                                                                </BeginStoryboard>
+                                                                 </BeginStoryboard>
                                                             </DataTrigger.EnterActions>
                                                         </DataTrigger>
                                                     </Style.Triggers>
