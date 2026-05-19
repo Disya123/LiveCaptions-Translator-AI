@@ -287,7 +287,6 @@ namespace LiveCaptionsTranslator
                 Caption.TranslatedCaption = string.Empty;
                 Caption.DisplayTranslatedCaption = string.Empty;
                 Caption.OverlayCurrentTranslation = string.Empty;
-                Caption.PrepareForNewBlock();
             };
             // Note: ChunkReceived is handled by OverlayWindow with throttling and color animation.
 
@@ -306,31 +305,25 @@ namespace LiveCaptionsTranslator
                              translatedText, string.Empty).Trim()) &&
                          string.CompareOrdinal(Caption.TranslatedCaption, translatedText) != 0)
                 {
-                    // Non-streaming output update (for Google, DeepL, etc.)
-                    Caption.TranslatedCaption = translatedText;
-                    Caption.DisplayTranslatedCaption =
-                        TextUtil.ShortenDisplaySentence(Caption.TranslatedCaption, TextUtil.VERYLONG_THRESHOLD);
-
-                    // Overlay window
-                    if (Caption.TranslatedCaption.Contains("[ERROR]") || Caption.TranslatedCaption.Contains("[WARNING]"))
+                    if (translatedText.Contains("[ERROR]") || translatedText.Contains("[WARNING]"))
                     {
-                        Caption.OverlayCurrentTranslation = Caption.TranslatedCaption;
-                        if (!TranslateAPI.HasStreaming)
-                        {
-                            Caption.PrepareForNewBlock();
-                            Caption.UpdateCurrentSubtitleBlock(Caption.OverlayCurrentTranslation);
-                        }
+                        Caption.TranslatedCaption = translatedText;
+                        Caption.DisplayTranslatedCaption = translatedText;
+                        Caption.OverlayCurrentTranslation = translatedText;
+                        Caption.PrepareForNewBlock();
+                        Caption.UpdateCurrentSubtitleBlock(Caption.OverlayCurrentTranslation);
                     }
-                    else
+                    else if (!TranslateAPI.HasStreaming)
                     {
+                        Caption.TranslatedCaption = translatedText;
+                        Caption.DisplayTranslatedCaption =
+                            TextUtil.ShortenDisplaySentence(Caption.TranslatedCaption, TextUtil.VERYLONG_THRESHOLD);
+
                         var match = RegexPatterns.NoticePrefixAndTranslation().Match(Caption.TranslatedCaption);
                         Caption.OverlayNoticePrefix = match.Groups[1].Value.Trim();
                         Caption.OverlayCurrentTranslation = match.Groups[2].Value.Trim();
-                        if (!TranslateAPI.HasStreaming)
-                        {
-                            Caption.PrepareForNewBlock();
-                            Caption.UpdateCurrentSubtitleBlock(Caption.OverlayCurrentTranslation);
-                        }
+                        Caption.PrepareForNewBlock();
+                        Caption.UpdateCurrentSubtitleBlock(Caption.OverlayCurrentTranslation);
                     }
                 }
 
