@@ -2,50 +2,32 @@ using System;
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
+using System.Threading.Channels;
 
 namespace LiveCaptionsTranslator.models
 {
     public class TranslationTaskQueue
     {
-        private readonly object _lock = new object();
-        private readonly Queue<TranslationTask> tasks = new();
-        private bool isRunning = false;
+        private readonly Channel<TranslationTask> _channel = Channel.CreateUnbounded<TranslationTask>();
 
         private (string translatedText, bool isChoke) output = (string.Empty, false);
         public (string translatedText, bool isChoke) Output => output;
 
+        public TranslationTaskQueue()
+        {
+            _ = Task.Run(ProcessQueueAsync);
+        }
+
         public void Enqueue(Func<CancellationToken, Task<(string, bool)>> worker, string originalText)
         {
             var newTranslationTask = new TranslationTask(worker, originalText, new CancellationTokenSource());
-            lock (_lock)
-            {
-                tasks.Enqueue(newTranslationTask);
-            }
-            _ = ProcessQueueAsync();
+            _channel.Writer.TryWrite(newTranslationTask);
         }
 
         private async Task ProcessQueueAsync()
         {
-            TranslationTask? currentTask = null;
-            lock (_lock)
+            await foreach (var currentTask in _channel.Reader.ReadAllAsync())
             {
-                if (isRunning)
-                    return;
-                isRunning = true;
-            }
-
-            while (true)
-            {
-                lock (_lock)
-                {
-                    if (tasks.Count == 0)
-                    {
-                        isRunning = false;
-                        return;
-                    }
-                    currentTask = tasks.Dequeue();
-                }
-
                 try
                 {
                     var result = await currentTask.ExecuteAsync();

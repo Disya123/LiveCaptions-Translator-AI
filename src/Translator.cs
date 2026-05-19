@@ -195,14 +195,20 @@ namespace LiveCaptionsTranslator
                 }
             }
 
-            // 2. Fallback to individual sentence matching if strict suffix match fails
-            // (handles rewinds, offsets, and minor corrections gracefully)
+            // 2. Fallback: Limit search depth to the last 7 sentences to prevent overhead
             for (int i = currentSentences.Count - 1; i >= 0; i--)
             {
                 string cur = currentSentences[i].Trim();
-                for (int j = translatedSentences.Count - 1; j >= 0; j--)
+                int lookbackDepth = Math.Max(0, translatedSentences.Count - 7);
+
+                for (int j = translatedSentences.Count - 1; j >= lookbackDepth; j--)
                 {
                     string hist = translatedSentences[j].Trim();
+
+                    // Length-difference heuristic to avoid computing similarity on strings of different lengths
+                    if (Math.Abs(cur.Length - hist.Length) > 20)
+                        continue;
+
                     if (string.CompareOrdinal(cur, hist) == 0 || TextUtil.Similarity(cur, hist) >= 0.9)
                     {
                         return i + 1;
