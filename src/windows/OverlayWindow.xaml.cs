@@ -1,10 +1,12 @@
-﻿using System.ComponentModel;
+using System.ComponentModel;
+using System.Text;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Input;
 using System.Windows.Interop;
 using System.Windows.Media;
+using System.Windows.Media.Animation;
 using System.Windows.Threading;
 using Wpf.Ui.Controls;
 
@@ -30,6 +32,17 @@ namespace LiveCaptionsTranslator
             {ColorEnum.Black, Brushes.Black},
         };
         private CaptionVisible onlyMode = CaptionVisible.Both;
+
+        // Streaming character queue and typewriter timer
+        private readonly Queue<char> _charQueue = new();
+        private readonly DispatcherTimer _chunkFlushTimer;
+        private readonly object _chunkLock = new();
+
+        // Color animation for new translation text
+        private ColorAnimation? _colorTransitionAnim;
+        private SolidColorBrush? _currentTranslationBrush;
+        private Color _highlightColor = Color.FromRgb(255, 165, 0); // Orange highlight
+        private Color _baseTranslationColor = Colors.White;
 
         public CaptionVisible OnlyMode
         {
@@ -66,6 +79,113 @@ namespace LiveCaptionsTranslator
 
             ApplyFontSize();
             ApplyBackgroundOpacity();
+
+            // Initialize typewriter timer (fires every 20ms for smooth character-by-character flow)
+            _chunkFlushTimer = new DispatcherTimer(DispatcherPriority.Render)
+            {
+                Interval = TimeSpan.FromMilliseconds(20)
+            };
+            _chunkFlushTimer.Tick += (s, e) => FlushChunkBuffer();
+
+            // Subscribe to streaming events from the translation queue
+            Translator.TranslationTaskQueue.ChunkReceived += OnChunkReceived;
+            Translator.TranslationTaskQueue.StreamingStarted += OnStreamingStarted;
+        }
+
+        private void OnChunkReceived(string chunk)
+        {
+            lock (_chunkLock)
+            {
+                foreach (char c in chunk)
+                {
+                    _charQueue.Enqueue(c);
+                }
+            }
+
+            // Ensure timer is running on UI thread
+            Dispatcher.BeginInvoke(() =>
+            {
+                if (!_chunkFlushTimer.IsEnabled)
+                    _chunkFlushTimer.Start();
+            });
+        }
+
+        private void OnStreamingStarted()
+        {
+            lock (_chunkLock)
+            {
+                _charQueue.Clear();
+            }
+            Dispatcher.BeginInvoke(() =>
+            {
+                // Start color transition animation when new translation begins
+                StartColorTransition();
+            });
+        }
+
+        private void FlushChunkBuffer()
+        {
+            string newText = string.Empty;
+            lock (_chunkLock)
+            {
+                int queueCount = _charQueue.Count;
+                if (queueCount == 0)
+                {
+                    _chunkFlushTimer.Stop();
+                    return;
+                }
+
+                // Dynamic speed adjustment based on queue size:
+                // If queue is long, type more characters per tick to avoid lagging behind speech.
+                int charsToType = 1;
+                if (queueCount > 80)
+                    charsToType = 6;
+                else if (queueCount > 40)
+                    charsToType = 3;
+                else if (queueCount > 15)
+                    charsToType = 2;
+
+                var sb = new StringBuilder();
+                for (int i = 0; i < charsToType && _charQueue.Count > 0; i++)
+                {
+                    sb.Append(_charQueue.Dequeue());
+                }
+                newText = sb.ToString();
+            }
+
+            // Append characters to Caption (triggers UI binding updates)
+            Translator.Caption.TranslatedCaption += newText;
+            Translator.Caption.DisplayTranslatedCaption =
+                LiveCaptionsTranslator.utils.TextUtil.ShortenDisplaySentence(
+                    Translator.Caption.TranslatedCaption,
+                    LiveCaptionsTranslator.utils.TextUtil.VERYLONG_THRESHOLD);
+
+            if (!Translator.Caption.TranslatedCaption.Contains("[ERROR]") &&
+                !Translator.Caption.TranslatedCaption.Contains("[WARNING]"))
+            {
+                var match = LiveCaptionsTranslator.utils.RegexPatterns.NoticePrefixAndTranslation()
+                    .Match(Translator.Caption.TranslatedCaption);
+                Translator.Caption.OverlayNoticePrefix = match.Groups[1].Value.Trim();
+                Translator.Caption.OverlayCurrentTranslation = match.Groups[2].Value.Trim();
+            }
+        }
+
+        private void StartColorTransition()
+        {
+            // Create an animatable brush for CurrentTranslationRun
+            _currentTranslationBrush = new SolidColorBrush(_highlightColor);
+            CurrentTranslationRun.Foreground = _currentTranslationBrush;
+
+            // Animate from highlight color to base translation color over 1.5 seconds
+            _colorTransitionAnim = new ColorAnimation
+            {
+                From = _highlightColor,
+                To = _baseTranslationColor,
+                Duration = new Duration(TimeSpan.FromSeconds(1.5)),
+                EasingFunction = new QuadraticEase { EasingMode = EasingMode.EaseOut }
+            };
+
+            _currentTranslationBrush.BeginAnimation(SolidColorBrush.ColorProperty, _colorTransitionAnim);
         }
 
         private void Border_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
@@ -368,7 +488,23 @@ namespace LiveCaptionsTranslator
 
             NoticePrefixRun.Foreground = brush;
             PreviousTranslationRun.Foreground = brush;
-            CurrentTranslationRun.Foreground = new SolidColorBrush(Color.FromRgb(r, g, b));
+
+            _baseTranslationColor = Color.FromRgb(r, g, b);
+
+            // Dynamically set highlight color for best contrast with the background/text color:
+            // If the base text is dark (light background), use vibrant dark blue highlight.
+            // If the base text is light (dark background), use vibrant orange/gold highlight.
+            double brightness = 0.299 * _baseTranslationColor.R + 0.587 * _baseTranslationColor.G + 0.114 * _baseTranslationColor.B;
+            if (brightness > 127)
+            {
+                _highlightColor = Color.FromRgb(255, 140, 0); // Vibrant Dark Orange
+            }
+            else
+            {
+                _highlightColor = Color.FromRgb(0, 120, 215); // Vibrant Blue
+            }
+
+            CurrentTranslationRun.Foreground = new SolidColorBrush(_baseTranslationColor);
         }
     }
 }

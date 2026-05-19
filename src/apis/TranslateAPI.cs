@@ -104,6 +104,7 @@ namespace LiveCaptionsTranslator.apis
                 {
                     var requestData = LLMRequestDataFactory.Create(openai_fallback_index,
                         config.ModelName, messages, config.Temperature);
+                    requestData.top_p = config.TopP;
                     string jsonContent = JsonSerializer.Serialize(requestData, requestData.GetType());
                     var content = new StringContent(jsonContent, Encoding.UTF8, "application/json");
 
@@ -173,6 +174,7 @@ namespace LiveCaptionsTranslator.apis
             messages.Add(new BaseLLMConfig.Message { role = "user", content = $"🔤 {text} 🔤" });
             
             var requestData = LLMRequestDataFactory.Create("Ollama", config.ModelName, messages, config.Temperature);
+            requestData.top_p = config.TopP;
             requestData.keep_alive = config.keep_alive;
             string jsonContent = JsonSerializer.Serialize(requestData, requestData.GetType());
             var content = new StringContent(jsonContent, Encoding.UTF8, "application/json");
@@ -237,7 +239,8 @@ namespace LiveCaptionsTranslator.apis
                 model = config.ModelName,
                 system_prompt = systemPrompt,
                 input = input,
-                temperature = config.Temperature
+                temperature = config.Temperature,
+                top_p = config.TopP
             };
 
             string jsonContent = JsonSerializer.Serialize(requestData);
@@ -321,6 +324,7 @@ namespace LiveCaptionsTranslator.apis
             messages.Add(new BaseLLMConfig.Message { role = "user", content = $"🔤 {text} 🔤" });
 
             var requestData = LLMRequestDataFactory.Create("OpenRouter", config.ModelName, messages, config.Temperature);
+            requestData.top_p = config.TopP;
 
             string jsonContent = JsonSerializer.Serialize(requestData, requestData.GetType());
             var content = new StringContent(jsonContent, Encoding.UTF8, "application/json");
@@ -388,6 +392,7 @@ namespace LiveCaptionsTranslator.apis
             messages.Add(new BaseLLMConfig.Message { role = "user", content = $"🔤 {text} 🔤" });
 
             var requestData = LLMRequestDataFactory.Create("OpenAI", config.ModelName, messages, config.Temperature);
+            requestData.top_p = config.TopP;
             requestData.stream = true;
             string jsonContent = JsonSerializer.Serialize(requestData, requestData.GetType());
             var content = new StringContent(jsonContent, Encoding.UTF8, "application/json");
@@ -490,6 +495,7 @@ namespace LiveCaptionsTranslator.apis
             messages.Add(new BaseLLMConfig.Message { role = "user", content = $"🔤 {text} 🔤" });
 
             var requestData = LLMRequestDataFactory.Create("Ollama", config.ModelName, messages, config.Temperature);
+            requestData.top_p = config.TopP;
             requestData.stream = true;
             requestData.keep_alive = config.keep_alive;
             string jsonContent = JsonSerializer.Serialize(requestData, requestData.GetType());
@@ -586,6 +592,7 @@ namespace LiveCaptionsTranslator.apis
             messages.Add(new BaseLLMConfig.Message { role = "user", content = $"🔤 {text} 🔤" });
 
             var requestData = LLMRequestDataFactory.Create("OpenRouter", config.ModelName, messages, config.Temperature);
+            requestData.top_p = config.TopP;
             requestData.stream = true;
             string jsonContent = JsonSerializer.Serialize(requestData, requestData.GetType());
             var content = new StringContent(jsonContent, Encoding.UTF8, "application/json");

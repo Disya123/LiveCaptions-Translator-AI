@@ -49,6 +49,7 @@ namespace LiveCaptionsTranslator.models
 
         private string modelName = "";
         private double temperature = 1.0;
+        private double topP = 1.0;
 
         public string ModelName
         {
@@ -66,6 +67,15 @@ namespace LiveCaptionsTranslator.models
             {
                 temperature = value;
                 OnPropertyChanged("Temperature");
+            }
+        }
+        public double TopP
+        {
+            get => topP;
+            set
+            {
+                topP = value;
+                OnPropertyChanged("TopP");
             }
         }
     }

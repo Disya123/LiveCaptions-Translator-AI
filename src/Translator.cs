@@ -21,7 +21,8 @@ namespace LiveCaptionsTranslator
         private static Setting? setting = null;
 
         private static readonly Queue<string> pendingTextQueue = new();
-        private static readonly TranslationTaskQueue translationTaskQueue = new();
+        private static readonly TranslationTaskQueue _translationTaskQueue = new();
+        public static TranslationTaskQueue TranslationTaskQueue => _translationTaskQueue;
 
         private static readonly List<string> translatedSentences = new();
         private static readonly List<string> stableBuffer = new();
@@ -118,7 +119,7 @@ namespace LiveCaptionsTranslator
                 // Update Overlay original text showing recent sentences
                 int displayCount = Math.Min(Setting.DisplaySentences + 1, currentSentences.Count);
                 var displaySentences = currentSentences.Skip(currentSentences.Count - displayCount);
-                Caption.OverlayOriginalCaption = TextUtil.JoinSentences(displaySentences);
+                Caption.OverlayOriginalCaption = string.Join("\n", displaySentences.Select(s => s.Trim()));
 
                 // Align currentSentences with translatedSentences to find new unprocessed sentences
                 // First, remove trailing incomplete sentence from translatedSentences if it exists,
@@ -261,7 +262,7 @@ namespace LiveCaptionsTranslator
                     else if (TranslateAPI.HasStreaming)
                     {
                         // Use streaming for LLM providers
-                        translationTaskQueue.EnqueueStreaming(
+                        _translationTaskQueue.EnqueueStreaming(
                             (onChunk, token) => Task.Run(
                                 () => TranslateStreaming(originalSnapshot, onChunk, token), token),
                             originalSnapshot);
@@ -269,7 +270,7 @@ namespace LiveCaptionsTranslator
                     else
                     {
                         // Use non-streaming for traditional translation APIs
-                        translationTaskQueue.Enqueue(token => Task.Run(
+                        _translationTaskQueue.Enqueue(token => Task.Run(
                             () => Translate(originalSnapshot, token), token), originalSnapshot);
                     }
                 }
@@ -280,31 +281,18 @@ namespace LiveCaptionsTranslator
 
         public static async Task DisplayLoop()
         {
-            // Subscribe to streaming events for real-time token display
-            translationTaskQueue.StreamingStarted += () =>
+            // Subscribe to streaming start event (to reset Caption state)
+            _translationTaskQueue.StreamingStarted += () =>
             {
                 Caption.TranslatedCaption = string.Empty;
                 Caption.DisplayTranslatedCaption = string.Empty;
                 Caption.OverlayCurrentTranslation = string.Empty;
             };
-
-            translationTaskQueue.ChunkReceived += (chunk) =>
-            {
-                Caption.TranslatedCaption += chunk;
-                Caption.DisplayTranslatedCaption =
-                    TextUtil.ShortenDisplaySentence(Caption.TranslatedCaption, TextUtil.VERYLONG_THRESHOLD);
-
-                if (!Caption.TranslatedCaption.Contains("[ERROR]") && !Caption.TranslatedCaption.Contains("[WARNING]"))
-                {
-                    var match = RegexPatterns.NoticePrefixAndTranslation().Match(Caption.TranslatedCaption);
-                    Caption.OverlayNoticePrefix = match.Groups[1].Value.Trim();
-                    Caption.OverlayCurrentTranslation = match.Groups[2].Value.Trim();
-                }
-            };
+            // Note: ChunkReceived is handled by OverlayWindow with throttling and color animation.
 
             while (true)
             {
-                var (translatedText, isChoke) = translationTaskQueue.Output;
+                var (translatedText, isChoke) = _translationTaskQueue.Output;
 
                 if (LogOnlyFlag)
                 {

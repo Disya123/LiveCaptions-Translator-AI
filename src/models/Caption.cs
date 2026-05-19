@@ -1,4 +1,4 @@
-﻿using System.ComponentModel;
+using System.ComponentModel;
 using System.Runtime.CompilerServices;
 using System.Text;
 
@@ -102,26 +102,17 @@ namespace LiveCaptionsTranslator.models
                 .Select(entry => entry == null || string.CompareOrdinal(entry.TranslatedText, "N/A") == 0 ||
                                  entry.TranslatedText.Contains("[ERROR]") || entry.TranslatedText.Contains("[WARNING]") ?
                     "" : (textType == TextType.Caption ? entry.SourceText : entry.TranslatedText))
-                .Aggregate((accu, cur) =>
-                {
-                    if (!string.IsNullOrEmpty(accu))
-                    {
-                        if (Array.IndexOf(TextUtil.PUNC_EOS, accu[^1]) == -1)
-                            accu += TextUtil.isCJChar(accu[^1]) ? "。" : ". ";
-                        else
-                            accu += TextUtil.isCJChar(accu[^1]) ? "" : " ";
-                    }
-                    cur = RegexPatterns.NoticePrefix().Replace(cur, "");
-                    return accu + cur;
-                });
+                .Where(s => !string.IsNullOrEmpty(s))
+                .Select(s => RegexPatterns.NoticePrefix().Replace(s, "").Trim())
+                .ToList();
 
-            if (textType == TextType.Translation)
-                prev = RegexPatterns.NoticePrefix().Replace(prev, "");
-            if (!string.IsNullOrEmpty(prev) && Array.IndexOf(TextUtil.PUNC_EOS, prev[^1]) == -1)
-                prev += TextUtil.isCJChar(prev[^1]) ? "。" : ".";
-            if (!string.IsNullOrEmpty(prev) && Encoding.UTF8.GetByteCount(prev[^1].ToString()) < 2)
-                prev += " ";
-            return prev;
+            if (prev.Count == 0)
+                return string.Empty;
+
+            string joined = string.Join("\n", prev);
+            if (!string.IsNullOrEmpty(joined))
+                joined += "\n";
+            return joined;
         }
 
         public IEnumerable<TranslationHistoryEntry> GetPreviousContexts(int count)

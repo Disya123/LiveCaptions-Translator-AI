@@ -318,6 +318,24 @@
                                                     Value="{Binding [Ollama].Temperature, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
                                             </StackPanel>
                                             <StackPanel
+                                                Grid.Row="1"
+                                                Grid.Column="1"
+                                                Margin="15,10,0,0"
+                                                Orientation="Vertical">
+                                                <ui:TextBlock Margin="2.5,0,0,5" Text="Top P" />
+                                                <ui:NumberBox
+                                                    Width="200"
+                                                    Height="30"
+                                                    Padding="10,4,10,7"
+                                                    ClearButtonEnabled="False"
+                                                    FontSize="13.3"
+                                                    LargeChange="0.1"
+                                                    Maximum="1"
+                                                    Minimum="0"
+                                                    SmallChange="0.05"
+                                                    Value="{Binding [Ollama].TopP, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                                            </StackPanel>
+                                            <StackPanel
                                                 Grid.Row="0"
                                                 Grid.Column="1"
                                                 Margin="15,0,0,0"
@@ -412,6 +430,7 @@
                                             <Grid.RowDefinitions>
                                                 <RowDefinition Height="Auto" />
                                                 <RowDefinition Height="Auto" />
+                                                <RowDefinition Height="Auto" />
                                             </Grid.RowDefinitions>
                                             <Grid.ColumnDefinitions>
                                                 <ColumnDefinition Width="Auto" />
@@ -503,6 +522,26 @@
                                                     FontSize="13.3"
                                                     Text="{Binding [LMStudio].ApiUrl, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
                                             </StackPanel>
+
+                                            <!-- Row 2 Col 0: Top P -->
+                                            <StackPanel
+                                                Grid.Row="2"
+                                                Grid.Column="0"
+                                                Margin="15,10,0,0"
+                                                Orientation="Vertical">
+                                                <ui:TextBlock Margin="2.5,0,0,5" Text="Top P" />
+                                                <ui:NumberBox
+                                                    Width="130"
+                                                    Height="30"
+                                                    Padding="10,4,10,7"
+                                                    ClearButtonEnabled="False"
+                                                    FontSize="13.3"
+                                                    LargeChange="0.1"
+                                                    Maximum="1"
+                                                    Minimum="0"
+                                                    SmallChange="0.05"
+                                                    Value="{Binding [LMStudio].TopP, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                                            </StackPanel>
                                         </Grid>
                                     </StackPanel>
                                 </ui:Card>
@@ -563,6 +602,7 @@
                                         <Separator Margin="0,0,0,10" />
                                         <Grid x:Name="OpenAIGrid">
                                             <Grid.RowDefinitions>
+                                                <RowDefinition Height="Auto" />
                                                 <RowDefinition Height="Auto" />
                                                 <RowDefinition Height="Auto" />
                                             </Grid.RowDefinitions>
@@ -650,6 +690,26 @@
                                                     Padding="10,4,10,7"
                                                     FontSize="13.3"
                                                     Text="{Binding [OpenAI].ApiKey, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                                            </StackPanel>
+
+                                            <!-- Row 2 Col 0: Top P -->
+                                            <StackPanel
+                                                Grid.Row="2"
+                                                Grid.Column="0"
+                                                Margin="15,10,0,0"
+                                                Orientation="Vertical">
+                                                <ui:TextBlock Margin="2.5,0,0,5" Text="Top P" />
+                                                <ui:NumberBox
+                                                    Width="130"
+                                                    Height="30"
+                                                    Padding="10,4,10,7"
+                                                    ClearButtonEnabled="False"
+                                                    FontSize="13.3"
+                                                    LargeChange="0.1"
+                                                    Maximum="1"
+                                                    Minimum="0"
+                                                    SmallChange="0.05"
+                                                    Value="{Binding [OpenAI].TopP, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
                                             </StackPanel>
                                         </Grid>
                                     </StackPanel>
@@ -761,6 +821,25 @@
                                                     Padding="10,4,10,7"
                                                     FontSize="13.3"
                                                     Text="{Binding [OpenRouter].ApiKey, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                                            </StackPanel>
+
+                                            <StackPanel
+                                                Grid.Row="1"
+                                                Grid.Column="1"
+                                                Margin="15,10,0,0"
+                                                Orientation="Vertical">
+                                                <ui:TextBlock Margin="2.5,0,0,5" Text="Top P" />
+                                                <ui:NumberBox
+                                                    Width="200"
+                                                    Height="30"
+                                                    Padding="10,4,10,7"
+                                                    ClearButtonEnabled="False"
+                                                    FontSize="13.3"
+                                                    LargeChange="0.1"
+                                                    Maximum="1"
+                                                    Minimum="0"
+                                                    SmallChange="0.05"
+                                                    Value="{Binding [OpenRouter].TopP, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
                                             </StackPanel>
                                         </Grid>
                                     </StackPanel>
