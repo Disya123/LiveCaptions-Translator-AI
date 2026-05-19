@@ -113,32 +113,42 @@ namespace LiveCaptionsTranslator.models
         {
             App.Current?.Dispatcher.Invoke(() =>
             {
-                var blockToFade = currentActiveSubtitleBlock;
-                if (blockToFade != null)
+                // Берем лимит из настроек, но минимум 1, чтобы хоть что-то оставалось
+                int maxBlocks = Math.Max(1, Translator.Setting.DisplaySentences);
+                
+                // Находим все блоки, которые еще живы (не начали исчезать)
+                var activeBlocks = ActiveSubtitles.Where(b => !b.IsFadingOut).ToList();
+                
+                // Если блоков на экране слишком много — убиваем только самые старые
+                while (activeBlocks.Count >= maxBlocks)
                 {
-                    blockToFade.IsFadingOut = true;
-                    _ = Task.Delay(2000).ContinueWith(_ =>
+                    var oldestBlock = activeBlocks.First();
+                    oldestBlock.IsFadingOut = true;
+                    
+                    // Удаляем элемент из коллекции ровно после завершения анимации затухания (1.5 сек)
+                    _ = Task.Delay(1500).ContinueWith(_ =>
                     {
                         try
                         {
                             App.Current?.Dispatcher.Invoke(() =>
                             {
-                                ActiveSubtitles.Remove(blockToFade);
+                                ActiveSubtitles.Remove(oldestBlock);
                             });
                         }
-                        catch {}
+                        catch { }
                     });
+                    
+                    activeBlocks.RemoveAt(0);
                 }
 
                 currentActiveSubtitleBlock = new SubtitleBlock();
                 
-                // Initialize block foreground with highlight color and animate to base color
+                // Заливаем базовый цвет и вешаем анимацию
                 var brush = new SolidColorBrush(highlightColor);
                 currentActiveSubtitleBlock.Foreground = brush;
                 
                 ActiveSubtitles.Add(currentActiveSubtitleBlock);
 
-                // Start transition to base translation color
                 var targetColor = Colors.White;
                 if (baseBrush is SolidColorBrush solidBaseBrush)
                 {

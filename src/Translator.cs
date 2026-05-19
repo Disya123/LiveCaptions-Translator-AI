@@ -313,12 +313,24 @@ namespace LiveCaptionsTranslator
 
                     // Overlay window
                     if (Caption.TranslatedCaption.Contains("[ERROR]") || Caption.TranslatedCaption.Contains("[WARNING]"))
+                    {
                         Caption.OverlayCurrentTranslation = Caption.TranslatedCaption;
+                        if (!TranslateAPI.HasStreaming)
+                        {
+                            Caption.PrepareForNewBlock();
+                            Caption.UpdateCurrentSubtitleBlock(Caption.OverlayCurrentTranslation);
+                        }
+                    }
                     else
                     {
                         var match = RegexPatterns.NoticePrefixAndTranslation().Match(Caption.TranslatedCaption);
                         Caption.OverlayNoticePrefix = match.Groups[1].Value.Trim();
                         Caption.OverlayCurrentTranslation = match.Groups[2].Value.Trim();
+                        if (!TranslateAPI.HasStreaming)
+                        {
+                            Caption.PrepareForNewBlock();
+                            Caption.UpdateCurrentSubtitleBlock(Caption.OverlayCurrentTranslation);
+                        }
                     }
                 }
 

@@ -76,22 +76,6 @@ namespace LiveCaptionsTranslator.models
                     else if (currentTask is StandardTranslationTask standardTask)
                     {
                         result = await standardTask.ExecuteAsync();
-
-                        System.Windows.Application.Current?.Dispatcher.Invoke(() =>
-                        {
-                            if (!isOverwrite)
-                            {
-                                Translator.Caption?.PrepareForNewBlock();
-                            }
-
-                            string textToUpdate = result.Item1;
-                            if (!textToUpdate.Contains("[ERROR]") && !textToUpdate.Contains("[WARNING]"))
-                            {
-                                var match = LiveCaptionsTranslator.utils.RegexPatterns.NoticePrefixAndTranslation().Match(textToUpdate);
-                                textToUpdate = match.Groups[2].Value.Trim();
-                            }
-                            Translator.Caption?.UpdateCurrentSubtitleBlock(textToUpdate);
-                        });
                     }
                     else continue;
 
