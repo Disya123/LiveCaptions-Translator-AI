@@ -258,8 +258,17 @@ namespace LiveCaptionsTranslator
                         bool isOverwrite = await IsOverwrite(originalSnapshot);
                         await LogOnly(originalSnapshot, isOverwrite);
                     }
+                    else if (TranslateAPI.HasStreaming)
+                    {
+                        // Use streaming for LLM providers
+                        translationTaskQueue.EnqueueStreaming(
+                            (onChunk, token) => Task.Run(
+                                () => TranslateStreaming(originalSnapshot, onChunk, token), token),
+                            originalSnapshot);
+                    }
                     else
                     {
+                        // Use non-streaming for traditional translation APIs
                         translationTaskQueue.Enqueue(token => Task.Run(
                             () => Translate(originalSnapshot, token), token), originalSnapshot);
                     }
@@ -271,6 +280,28 @@ namespace LiveCaptionsTranslator
 
         public static async Task DisplayLoop()
         {
+            // Subscribe to streaming events for real-time token display
+            translationTaskQueue.StreamingStarted += () =>
+            {
+                Caption.TranslatedCaption = string.Empty;
+                Caption.DisplayTranslatedCaption = string.Empty;
+                Caption.OverlayCurrentTranslation = string.Empty;
+            };
+
+            translationTaskQueue.ChunkReceived += (chunk) =>
+            {
+                Caption.TranslatedCaption += chunk;
+                Caption.DisplayTranslatedCaption =
+                    TextUtil.ShortenDisplaySentence(Caption.TranslatedCaption, TextUtil.VERYLONG_THRESHOLD);
+
+                if (!Caption.TranslatedCaption.Contains("[ERROR]") && !Caption.TranslatedCaption.Contains("[WARNING]"))
+                {
+                    var match = RegexPatterns.NoticePrefixAndTranslation().Match(Caption.TranslatedCaption);
+                    Caption.OverlayNoticePrefix = match.Groups[1].Value.Trim();
+                    Caption.OverlayCurrentTranslation = match.Groups[2].Value.Trim();
+                }
+            };
+
             while (true)
             {
                 var (translatedText, isChoke) = translationTaskQueue.Output;
@@ -286,7 +317,7 @@ namespace LiveCaptionsTranslator
                              translatedText, string.Empty).Trim()) &&
                          string.CompareOrdinal(Caption.TranslatedCaption, translatedText) != 0)
                 {
-                    // Main page
+                    // Non-streaming output update (for Google, DeepL, etc.)
                     Caption.TranslatedCaption = translatedText;
                     Caption.DisplayTranslatedCaption =
                         TextUtil.ShortenDisplaySentence(Caption.TranslatedCaption, TextUtil.VERYLONG_THRESHOLD);
@@ -355,6 +386,36 @@ namespace LiveCaptionsTranslator
             }
 
             return (translatedText, isChoke);
+        }
+
+        public static async Task<(string, bool)> TranslateStreaming(string text, Action<string> onChunk, CancellationToken token = default)
+        {
+            bool isChoke = Array.IndexOf(TextUtil.PUNC_EOS, text[^1]) != -1;
+
+            try
+            {
+                var sw = Setting.MainWindow.LatencyShow ? Stopwatch.StartNew() : null;
+
+                var streamFunc = TranslateAPI.STREAM_FUNCTIONS[Setting.ApiName];
+                string translatedText = await streamFunc(text, onChunk, token);
+                translatedText = translatedText.Replace("🔤", "");
+
+                if (sw != null)
+                {
+                    sw.Stop();
+                    translatedText = $"[{sw.ElapsedMilliseconds,4} ms] " + translatedText;
+                }
+
+                return (translatedText, isChoke);
+            }
+            catch (OperationCanceledException)
+            {
+                throw;
+            }
+            catch (Exception ex)
+            {
+                return ($"[ERROR] Translation Failed: {ex.Message}", isChoke);
+            }
         }
 
         public static async Task Log(string originalText, string translatedText,

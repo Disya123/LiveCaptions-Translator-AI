@@ -8,20 +8,43 @@ namespace LiveCaptionsTranslator.models
 {
     public class TranslationTaskQueue
     {
-        private readonly Channel<TranslationTask> _channel = Channel.CreateUnbounded<TranslationTask>();
+        private readonly Channel<ITranslationTask> _channel = Channel.CreateUnbounded<ITranslationTask>();
 
         private (string translatedText, bool isChoke) output = (string.Empty, false);
         public (string translatedText, bool isChoke) Output => output;
+
+        /// <summary>
+        /// Fired for each streaming chunk received from an LLM provider.
+        /// </summary>
+        public event Action<string>? ChunkReceived;
+
+        /// <summary>
+        /// Fired when a new streaming translation begins (to reset UI state).
+        /// </summary>
+        public event Action? StreamingStarted;
 
         public TranslationTaskQueue()
         {
             _ = Task.Run(ProcessQueueAsync);
         }
 
+        /// <summary>
+        /// Enqueue a non-streaming translation task (Google, DeepL, etc.)
+        /// </summary>
         public void Enqueue(Func<CancellationToken, Task<(string, bool)>> worker, string originalText)
         {
-            var newTranslationTask = new TranslationTask(worker, originalText, new CancellationTokenSource());
-            _channel.Writer.TryWrite(newTranslationTask);
+            var task = new StandardTranslationTask(worker, originalText, new CancellationTokenSource());
+            _channel.Writer.TryWrite(task);
+        }
+
+        /// <summary>
+        /// Enqueue a streaming translation task (OpenAI, Ollama, OpenRouter).
+        /// The worker receives an Action&lt;string&gt; onChunk callback.
+        /// </summary>
+        public void EnqueueStreaming(Func<Action<string>, CancellationToken, Task<(string, bool)>> worker, string originalText)
+        {
+            var task = new StreamingTranslationTask(worker, originalText, new CancellationTokenSource());
+            _channel.Writer.TryWrite(task);
         }
 
         private async Task ProcessQueueAsync()
@@ -30,7 +53,19 @@ namespace LiveCaptionsTranslator.models
             {
                 try
                 {
-                    var result = await currentTask.ExecuteAsync();
+                    (string, bool) result;
+
+                    if (currentTask is StreamingTranslationTask streamingTask)
+                    {
+                        StreamingStarted?.Invoke();
+                        result = await streamingTask.ExecuteAsync(chunk => ChunkReceived?.Invoke(chunk));
+                    }
+                    else if (currentTask is StandardTranslationTask standardTask)
+                    {
+                        result = await standardTask.ExecuteAsync();
+                    }
+                    else continue;
+
                     output = result;
 
                     // Log after translation.
@@ -51,13 +86,19 @@ namespace LiveCaptionsTranslator.models
         }
     }
 
-    public class TranslationTask
+    public interface ITranslationTask
+    {
+        string OriginalText { get; }
+        CancellationTokenSource CTS { get; }
+    }
+
+    public class StandardTranslationTask : ITranslationTask
     {
         private readonly Func<CancellationToken, Task<(string, bool)>> _worker;
         public string OriginalText { get; }
         public CancellationTokenSource CTS { get; }
 
-        public TranslationTask(Func<CancellationToken, Task<(string, bool)>> worker,
+        public StandardTranslationTask(Func<CancellationToken, Task<(string, bool)>> worker,
             string originalText, CancellationTokenSource cts)
         {
             _worker = worker;
@@ -68,6 +109,26 @@ namespace LiveCaptionsTranslator.models
         public Task<(string, bool)> ExecuteAsync()
         {
             return _worker(CTS.Token);
+        }
+    }
+
+    public class StreamingTranslationTask : ITranslationTask
+    {
+        private readonly Func<Action<string>, CancellationToken, Task<(string, bool)>> _worker;
+        public string OriginalText { get; }
+        public CancellationTokenSource CTS { get; }
+
+        public StreamingTranslationTask(Func<Action<string>, CancellationToken, Task<(string, bool)>> worker,
+            string originalText, CancellationTokenSource cts)
+        {
+            _worker = worker;
+            OriginalText = originalText;
+            CTS = cts;
+        }
+
+        public Task<(string, bool)> ExecuteAsync(Action<string> onChunk)
+        {
+            return _worker(onChunk, CTS.Token);
         }
     }
 }

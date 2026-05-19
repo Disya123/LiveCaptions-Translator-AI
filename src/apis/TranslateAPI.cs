@@ -1,3 +1,4 @@
+using System.IO;
 using System.Net;
 using System.Net.Http;
 using System.Text;
@@ -40,14 +41,29 @@ namespace LiveCaptionsTranslator.apis
             "Google", "Google2"
         };
 
+        // Streaming functions for LLM providers that support SSE
+        public static readonly Dictionary<string, Func<string, Action<string>, CancellationToken, Task<string>>>
+            STREAM_FUNCTIONS = new()
+        {
+            { "OpenAI", OpenAIStream },
+            { "Ollama", OllamaStream },
+            { "OpenRouter", OpenRouterStream },
+        };
+
         public static Func<string, CancellationToken, Task<string>> TranslateFunction =>
             TRANSLATE_FUNCTIONS[Translator.Setting.ApiName];
         public static bool IsLLMBased => LLM_BASED_APIS.Contains(Translator.Setting.ApiName);
+        public static bool HasStreaming => STREAM_FUNCTIONS.ContainsKey(Translator.Setting.ApiName);
         public static string Prompt => Translator.Setting.Prompt;
 
         private static readonly HttpClient client = new HttpClient()
         {
             Timeout = TimeSpan.FromSeconds(8)
+        };
+        // Streaming client with no timeout (SSE connections are long-lived)
+        private static readonly HttpClient streamingClient = new HttpClient()
+        {
+            Timeout = Timeout.InfiniteTimeSpan
         };
         private static int openai_fallback_index = 0;
 
@@ -340,6 +356,306 @@ namespace LiveCaptionsTranslator.apis
             }
             else
                 return $"[ERROR] Translation Failed: HTTP Error - {response.StatusCode}";
+        }
+
+        // ==================== STREAMING METHODS ====================
+
+        public static async Task<string> OpenAIStream(string text, Action<string> onChunk, CancellationToken token = default)
+        {
+            var config = Translator.Setting["OpenAI"] as OpenAIConfig;
+            string language = OpenAIConfig.SupportedLanguages.TryGetValue(
+                Translator.Setting.TargetLanguage, out var langValue) ? langValue : Translator.Setting.TargetLanguage;
+
+            var messages = new List<BaseLLMConfig.Message>
+            {
+                new BaseLLMConfig.Message { role = "system", content = string.Format(Prompt, language) }
+            };
+
+            if (Translator.Setting.ContextAware)
+            {
+                foreach (var entry in Translator.Caption.AwareContexts)
+                {
+                    string translatedText = entry.TranslatedText;
+                    if (translatedText.Contains("[ERROR]") || translatedText.Contains("[WARNING]"))
+                        continue;
+                    translatedText = RegexPatterns.NoticePrefix().Replace(translatedText, "");
+
+                    messages.Add(new BaseLLMConfig.Message { role = "user", content = $"🔤 {entry.SourceText} 🔤" });
+                    messages.Add(new BaseLLMConfig.Message { role = "assistant", content = $"{translatedText}" });
+                }
+            }
+
+            messages.Add(new BaseLLMConfig.Message { role = "user", content = $"🔤 {text} 🔤" });
+
+            var requestData = LLMRequestDataFactory.Create("OpenAI", config.ModelName, messages, config.Temperature);
+            requestData.stream = true;
+            string jsonContent = JsonSerializer.Serialize(requestData, requestData.GetType());
+            var content = new StringContent(jsonContent, Encoding.UTF8, "application/json");
+
+            streamingClient.DefaultRequestHeaders.Clear();
+            streamingClient.DefaultRequestHeaders.Add("Authorization", $"Bearer {config.ApiKey}");
+
+            try
+            {
+                using var response = await streamingClient.SendAsync(
+                    new HttpRequestMessage(HttpMethod.Post, TextUtil.NormalizeUrl(config.ApiUrl)) { Content = content },
+                    HttpCompletionOption.ResponseHeadersRead, token);
+
+                if (!response.IsSuccessStatusCode)
+                    return $"[ERROR] Translation Failed: HTTP Error - {response.StatusCode}";
+
+                using var stream = await response.Content.ReadAsStreamAsync(token);
+                using var reader = new StreamReader(stream);
+
+                var fullText = new StringBuilder();
+                bool inThinkBlock = false;
+
+                while (!reader.EndOfStream && !token.IsCancellationRequested)
+                {
+                    var line = await reader.ReadLineAsync();
+                    if (string.IsNullOrWhiteSpace(line)) continue;
+                    if (!line.StartsWith("data: ")) continue;
+
+                    string json = line.Substring(6);
+                    if (json == "[DONE]") break;
+
+                    try
+                    {
+                        using var doc = JsonDocument.Parse(json);
+                        var root = doc.RootElement;
+                        if (root.TryGetProperty("choices", out var choices) &&
+                            choices.GetArrayLength() > 0)
+                        {
+                            var delta = choices[0].GetProperty("delta");
+                            if (delta.TryGetProperty("content", out var contentProp))
+                            {
+                                string chunk = contentProp.GetString() ?? "";
+                                if (string.IsNullOrEmpty(chunk)) continue;
+
+                                // Filter out <think>...</think> blocks
+                                if (chunk.Contains("<think>")) { inThinkBlock = true; continue; }
+                                if (chunk.Contains("</think>")) { inThinkBlock = false; continue; }
+                                if (inThinkBlock) continue;
+
+                                fullText.Append(chunk);
+                                onChunk(chunk);
+                            }
+                        }
+                    }
+                    catch (JsonException) { /* skip malformed chunk */ }
+                }
+
+                string result = fullText.ToString().Replace("🔤", "").Trim();
+                return string.IsNullOrEmpty(result) ? "[ERROR] Translation Failed: Empty streaming response" : result;
+            }
+            catch (OperationCanceledException ex)
+            {
+                if (ex.Message.StartsWith("The request"))
+                    return $"[ERROR] Translation Failed: The request was canceled due to timeout, " +
+                           $"please use a faster API or check network connection.";
+                throw;
+            }
+            catch (Exception ex)
+            {
+                return $"[ERROR] Translation Failed: {ex.Message}";
+            }
+        }
+
+        public static async Task<string> OllamaStream(string text, Action<string> onChunk, CancellationToken token = default)
+        {
+            var config = Translator.Setting["Ollama"] as OllamaConfig;
+            string language = OllamaConfig.SupportedLanguages.TryGetValue(
+                Translator.Setting.TargetLanguage, out var langValue) ? langValue : Translator.Setting.TargetLanguage;
+            string apiUrl = TextUtil.NormalizeUrl(config.ApiUrl + "/api/chat");
+
+            var messages = new List<BaseLLMConfig.Message>
+            {
+                new BaseLLMConfig.Message { role = "system", content = string.Format(Prompt, language) }
+            };
+
+            if (Translator.Setting.ContextAware)
+            {
+                foreach (var entry in Translator.Caption.AwareContexts)
+                {
+                    string translatedText = entry.TranslatedText;
+                    if (translatedText.Contains("[ERROR]") || translatedText.Contains("[WARNING]"))
+                        continue;
+                    translatedText = RegexPatterns.NoticePrefix().Replace(translatedText, "");
+
+                    messages.Add(new BaseLLMConfig.Message { role = "user", content = $"🔤 {entry.SourceText} 🔤" });
+                    messages.Add(new BaseLLMConfig.Message { role = "assistant", content = $"{translatedText}" });
+                }
+            }
+
+            messages.Add(new BaseLLMConfig.Message { role = "user", content = $"🔤 {text} 🔤" });
+
+            var requestData = LLMRequestDataFactory.Create("Ollama", config.ModelName, messages, config.Temperature);
+            requestData.stream = true;
+            requestData.keep_alive = config.keep_alive;
+            string jsonContent = JsonSerializer.Serialize(requestData, requestData.GetType());
+            var content = new StringContent(jsonContent, Encoding.UTF8, "application/json");
+            streamingClient.DefaultRequestHeaders.Clear();
+
+            try
+            {
+                using var response = await streamingClient.SendAsync(
+                    new HttpRequestMessage(HttpMethod.Post, apiUrl) { Content = content },
+                    HttpCompletionOption.ResponseHeadersRead, token);
+
+                if (!response.IsSuccessStatusCode)
+                    return $"[ERROR] Translation Failed: HTTP Error - {response.StatusCode}";
+
+                using var stream = await response.Content.ReadAsStreamAsync(token);
+                using var reader = new StreamReader(stream);
+
+                var fullText = new StringBuilder();
+                bool inThinkBlock = false;
+
+                while (!reader.EndOfStream && !token.IsCancellationRequested)
+                {
+                    var line = await reader.ReadLineAsync();
+                    if (string.IsNullOrWhiteSpace(line)) continue;
+
+                    try
+                    {
+                        using var doc = JsonDocument.Parse(line);
+                        var root = doc.RootElement;
+
+                        bool done = root.TryGetProperty("done", out var doneProp) && doneProp.GetBoolean();
+                        if (done) break;
+
+                        if (root.TryGetProperty("message", out var message) &&
+                            message.TryGetProperty("content", out var contentProp))
+                        {
+                            string chunk = contentProp.GetString() ?? "";
+                            if (string.IsNullOrEmpty(chunk)) continue;
+
+                            if (chunk.Contains("<think>")) { inThinkBlock = true; continue; }
+                            if (chunk.Contains("</think>")) { inThinkBlock = false; continue; }
+                            if (inThinkBlock) continue;
+
+                            fullText.Append(chunk);
+                            onChunk(chunk);
+                        }
+                    }
+                    catch (JsonException) { /* skip malformed line */ }
+                }
+
+                string result = fullText.ToString().Replace("🔤", "").Trim();
+                return string.IsNullOrEmpty(result) ? "[ERROR] Translation Failed: Empty streaming response" : result;
+            }
+            catch (OperationCanceledException ex)
+            {
+                if (ex.Message.StartsWith("The request"))
+                    return $"[ERROR] Translation Failed: The request was canceled due to timeout, " +
+                           $"please use a faster API or check network connection.";
+                throw;
+            }
+            catch (Exception ex)
+            {
+                return $"[ERROR] Translation Failed: {ex.Message}";
+            }
+        }
+
+        public static async Task<string> OpenRouterStream(string text, Action<string> onChunk, CancellationToken token = default)
+        {
+            var config = Translator.Setting["OpenRouter"] as OpenRouterConfig;
+            string language = OpenRouterConfig.SupportedLanguages.TryGetValue(
+                Translator.Setting.TargetLanguage, out var langValue) ? langValue : Translator.Setting.TargetLanguage;
+            string apiUrl = "https://openrouter.ai/api/v1/chat/completions";
+
+            var messages = new List<BaseLLMConfig.Message>
+            {
+                new BaseLLMConfig.Message { role = "system", content = string.Format(Prompt, language) }
+            };
+
+            if (Translator.Setting.ContextAware)
+            {
+                foreach (var entry in Translator.Caption.AwareContexts)
+                {
+                    string translatedText = entry.TranslatedText;
+                    if (translatedText.Contains("[ERROR]") || translatedText.Contains("[WARNING]"))
+                        continue;
+                    translatedText = RegexPatterns.NoticePrefix().Replace(translatedText, "");
+
+                    messages.Add(new BaseLLMConfig.Message { role = "user", content = $"🔤 {entry.SourceText} 🔤" });
+                    messages.Add(new BaseLLMConfig.Message { role = "assistant", content = $"{translatedText}" });
+                }
+            }
+
+            messages.Add(new BaseLLMConfig.Message { role = "user", content = $"🔤 {text} 🔤" });
+
+            var requestData = LLMRequestDataFactory.Create("OpenRouter", config.ModelName, messages, config.Temperature);
+            requestData.stream = true;
+            string jsonContent = JsonSerializer.Serialize(requestData, requestData.GetType());
+            var content = new StringContent(jsonContent, Encoding.UTF8, "application/json");
+
+            streamingClient.DefaultRequestHeaders.Clear();
+            streamingClient.DefaultRequestHeaders.Add("Authorization", $"Bearer {config?.ApiKey}");
+
+            try
+            {
+                using var response = await streamingClient.SendAsync(
+                    new HttpRequestMessage(HttpMethod.Post, apiUrl) { Content = content },
+                    HttpCompletionOption.ResponseHeadersRead, token);
+
+                if (!response.IsSuccessStatusCode)
+                    return $"[ERROR] Translation Failed: HTTP Error - {response.StatusCode}";
+
+                using var stream = await response.Content.ReadAsStreamAsync(token);
+                using var reader = new StreamReader(stream);
+
+                var fullText = new StringBuilder();
+                bool inThinkBlock = false;
+
+                while (!reader.EndOfStream && !token.IsCancellationRequested)
+                {
+                    var line = await reader.ReadLineAsync();
+                    if (string.IsNullOrWhiteSpace(line)) continue;
+                    if (!line.StartsWith("data: ")) continue;
+
+                    string json = line.Substring(6);
+                    if (json == "[DONE]") break;
+
+                    try
+                    {
+                        using var doc = JsonDocument.Parse(json);
+                        var root = doc.RootElement;
+                        if (root.TryGetProperty("choices", out var choices) &&
+                            choices.GetArrayLength() > 0)
+                        {
+                            var delta = choices[0].GetProperty("delta");
+                            if (delta.TryGetProperty("content", out var contentProp))
+                            {
+                                string chunk = contentProp.GetString() ?? "";
+                                if (string.IsNullOrEmpty(chunk)) continue;
+
+                                if (chunk.Contains("<think>")) { inThinkBlock = true; continue; }
+                                if (chunk.Contains("</think>")) { inThinkBlock = false; continue; }
+                                if (inThinkBlock) continue;
+
+                                fullText.Append(chunk);
+                                onChunk(chunk);
+                            }
+                        }
+                    }
+                    catch (JsonException) { /* skip malformed chunk */ }
+                }
+
+                string result = fullText.ToString().Replace("🔤", "").Trim();
+                return string.IsNullOrEmpty(result) ? "[ERROR] Translation Failed: Empty streaming response" : result;
+            }
+            catch (OperationCanceledException ex)
+            {
+                if (ex.Message.StartsWith("The request"))
+                    return $"[ERROR] Translation Failed: The request was canceled due to timeout, " +
+                           $"please use a faster API or check network connection.";
+                throw;
+            }
+            catch (Exception ex)
+            {
+                return $"[ERROR] Translation Failed: {ex.Message}";
+            }
         }
 
         public static async Task<string> Google(string text, CancellationToken token = default)
