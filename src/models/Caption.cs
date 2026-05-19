@@ -86,8 +86,17 @@ namespace LiveCaptionsTranslator.models
             GetPreviousText(Translator.Setting.DisplaySentences, TextType.Translation);
 
         private SubtitleBlock? currentActiveSubtitleBlock = null;
+        private bool _needsNewBlock = true;
 
         public ObservableCollection<SubtitleBlock> ActiveSubtitles { get; } = new();
+
+        public void PrepareForNewBlock()
+        {
+            App.Current?.Dispatcher.Invoke(() =>
+            {
+                _needsNewBlock = true;
+            });
+        }
 
         public double TranslationFontSize => Translator.Setting.OverlayWindow.FontSize * 1.25;
         public double TranslationFontStroke => Translator.Setting.OverlayWindow.FontStroke;
@@ -151,10 +160,11 @@ namespace LiveCaptionsTranslator.models
         {
             App.Current?.Dispatcher.Invoke(() =>
             {
-                if (currentActiveSubtitleBlock == null)
+                if (_needsNewBlock || currentActiveSubtitleBlock == null)
                 {
                     var baseBrush = OverlayWindow.ColorMap[Translator.Setting.OverlayWindow.FontColor];
                     StartNewSubtitleBlock(Color.FromRgb(255, 165, 0), baseBrush);
+                    _needsNewBlock = false;
                 }
                 if (currentActiveSubtitleBlock != null)
                 {
@@ -194,6 +204,7 @@ namespace LiveCaptionsTranslator.models
             {
                 ActiveSubtitles.Clear();
                 currentActiveSubtitleBlock = null;
+                _needsNewBlock = true;
             });
         }
 

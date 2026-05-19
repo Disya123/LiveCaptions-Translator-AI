@@ -60,16 +60,13 @@ namespace LiveCaptionsTranslator.models
                     {
                         System.Windows.Application.Current?.Dispatcher.Invoke(() =>
                         {
-                            var baseBrush = OverlayWindow.ColorMap[Translator.Setting.OverlayWindow.FontColor];
-                            var highlightColor = System.Windows.Media.Color.FromRgb(255, 165, 0);
-
                             if (!isOverwrite)
                             {
-                                Translator.Caption.StartNewSubtitleBlock(highlightColor, baseBrush);
+                                Translator.Caption?.PrepareForNewBlock();
                             }
                             else
                             {
-                                Translator.Caption.ClearCurrentSubtitleBlockText();
+                                Translator.Caption?.ClearCurrentSubtitleBlockText();
                             }
                         });
 
@@ -82,12 +79,9 @@ namespace LiveCaptionsTranslator.models
 
                         System.Windows.Application.Current?.Dispatcher.Invoke(() =>
                         {
-                            var baseBrush = OverlayWindow.ColorMap[Translator.Setting.OverlayWindow.FontColor];
-                            var highlightColor = System.Windows.Media.Color.FromRgb(255, 165, 0);
-
                             if (!isOverwrite)
                             {
-                                Translator.Caption.StartNewSubtitleBlock(highlightColor, baseBrush);
+                                Translator.Caption?.PrepareForNewBlock();
                             }
 
                             string textToUpdate = result.Item1;
@@ -96,7 +90,7 @@ namespace LiveCaptionsTranslator.models
                                 var match = LiveCaptionsTranslator.utils.RegexPatterns.NoticePrefixAndTranslation().Match(textToUpdate);
                                 textToUpdate = match.Groups[2].Value.Trim();
                             }
-                            Translator.Caption.UpdateCurrentSubtitleBlock(textToUpdate);
+                            Translator.Caption?.UpdateCurrentSubtitleBlock(textToUpdate);
                         });
                     }
                     else continue;

@@ -160,9 +160,16 @@ namespace LiveCaptionsTranslator
             {
                 var match = LiveCaptionsTranslator.utils.RegexPatterns.NoticePrefixAndTranslation()
                     .Match(Translator.Caption.TranslatedCaption);
-                Translator.Caption.OverlayNoticePrefix = match.Groups[1].Value.Trim();
-                Translator.Caption.OverlayCurrentTranslation = match.Groups[2].Value.Trim();
-                Translator.Caption.UpdateCurrentSubtitleBlock(Translator.Caption.OverlayCurrentTranslation);
+                if (match.Success)
+                {
+                    Translator.Caption.OverlayNoticePrefix = match.Groups[1].Value.Trim();
+                    Translator.Caption.OverlayCurrentTranslation = match.Groups[2].Value.Trim();
+                    Translator.Caption.UpdateCurrentSubtitleBlock(Translator.Caption.OverlayCurrentTranslation);
+                }
+                else
+                {
+                    Translator.Caption.UpdateCurrentSubtitleBlock(Translator.Caption.TranslatedCaption);
+                }
             }
             else
             {
