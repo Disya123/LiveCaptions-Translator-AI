@@ -234,6 +234,15 @@
                         Icon="{ui:SymbolIcon lockClosed16,
                                              Filled=False}"
                         ToolTip="Click Through" />
+                    <ui:Button
+                        x:Name="TTSMuteButton"
+                        Margin="5,0,0,0"
+                        Background="#FFAAAAAA"
+                        Click="TTSMuteButton_Click"
+                        Cursor="Hand"
+                        Icon="{ui:SymbolIcon Speaker224,
+                                             Filled=False}"
+                        ToolTip="Mute/Unmute TTS" />
                 </StackPanel>
             </Grid>
         </Border>

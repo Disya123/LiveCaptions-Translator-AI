@@ -1,4 +1,4 @@
-﻿<Page
+<Page
     x:Class="LiveCaptionsTranslator.SettingPage"
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
@@ -11,6 +11,10 @@
     mc:Ignorable="d">
 
     <Grid Margin="15">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
         <Grid.ColumnDefinitions>
             <ColumnDefinition Width="Auto" />
             <ColumnDefinition Width="Auto" />
@@ -19,7 +23,7 @@
             <ColumnDefinition Width="Auto" />
         </Grid.ColumnDefinitions>
 
-        <StackPanel Grid.Column="0" Orientation="Vertical">
+        <StackPanel Grid.Row="0" Grid.Column="0" Orientation="Vertical">
             <StackPanel Margin="15,0,0,0" Orientation="Vertical">
                 <StackPanel VerticalAlignment="Center" Orientation="Horizontal">
                     <TextBlock Margin="2.5,0,0,5" Text="LiveCaptions" />
@@ -93,7 +97,7 @@
             </StackPanel>
         </StackPanel>
 
-        <StackPanel Grid.Column="1" Orientation="Vertical">
+        <StackPanel Grid.Row="0" Grid.Column="1" Orientation="Vertical">
             <StackPanel Margin="15,0,0,0" Orientation="Vertical">
                 <StackPanel VerticalAlignment="Center" Orientation="Horizontal">
                     <TextBlock Margin="2.5,0,0,5" Text="Translate API" />
@@ -167,7 +171,7 @@
             </StackPanel>
         </StackPanel>
 
-        <StackPanel Grid.Column="2" Orientation="Vertical">
+        <StackPanel Grid.Row="0" Grid.Column="2" Orientation="Vertical">
             <StackPanel Margin="15,0,0,0" Orientation="Vertical">
                 <StackPanel VerticalAlignment="Center" Orientation="Horizontal">
                     <TextBlock Margin="2.5,0,0,5" Text="API Setting" />
@@ -193,7 +197,7 @@
             </StackPanel>
         </StackPanel>
 
-        <StackPanel Grid.Column="3" Orientation="Vertical">
+        <StackPanel Grid.Row="0" Grid.Column="3" Orientation="Vertical">
             <StackPanel Margin="15,0,0,0" Orientation="Vertical">
                 <StackPanel VerticalAlignment="Center" Orientation="Horizontal">
                     <TextBlock Margin="2.5,0,0,5" Text="Contexts" />
@@ -261,7 +265,7 @@
             </StackPanel>
         </StackPanel>
 
-        <StackPanel Grid.Column="4" Orientation="Vertical">
+        <StackPanel Grid.Row="0" Grid.Column="4" Orientation="Vertical">
             <StackPanel Margin="15,0,0,0" Orientation="Vertical">
                 <TextBlock Margin="2.5,0,0,5" Text="Context Aware" />
                 <StackPanel VerticalAlignment="Center" Orientation="Horizontal">
@@ -293,5 +297,56 @@
                 </StackPanel>
             </StackPanel>
         </StackPanel>
+
+        <!-- TTS Settings Row -->
+        <ui:CardExpander Grid.Row="1" Grid.ColumnSpan="5" Margin="15,20,15,0" Icon="{ui:SymbolIcon Speaker224}" Header="Text-to-Speech (TTS) Settings">
+            <StackPanel Orientation="Vertical">
+                <StackPanel Orientation="Horizontal" Margin="0,0,0,10">
+                    <TextBlock Text="TTS Engine: " VerticalAlignment="Center" Margin="0,0,10,0"/>
+                    <ComboBox Width="150" SelectedItem="{Binding TTSEngine, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}">
+                        <ComboBoxItem Content="None" />
+                        <ComboBoxItem Content="OpenAI" />
+                        <ComboBoxItem Content="Google" />
+                    </ComboBox>
+                </StackPanel>
+
+                <StackPanel>
+                    <StackPanel.Style>
+                        <Style TargetType="StackPanel">
+                            <Setter Property="Visibility" Value="Collapsed" />
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding TTSEngine}" Value="OpenAI">
+                                    <Setter Property="Visibility" Value="Visible" />
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </StackPanel.Style>
+                    <ui:TextBox Margin="0,0,0,5" PlaceholderText="API URL" Text="{Binding OpenAITTSConfig.ApiUrl, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                    <ui:PasswordBox Margin="0,0,0,5" PlaceholderText="API Key" PasswordChar="*" Text="{Binding OpenAITTSConfig.ApiKey, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                    <StackPanel Orientation="Horizontal" Margin="0,0,0,5">
+                        <ui:TextBox Width="150" Margin="0,0,10,0" PlaceholderText="Model (tts-1)" Text="{Binding OpenAITTSConfig.Model, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                        <ui:TextBox Width="150" PlaceholderText="Voice (alloy)" Text="{Binding OpenAITTSConfig.Voice, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                    </StackPanel>
+                </StackPanel>
+
+                <StackPanel>
+                    <StackPanel.Style>
+                        <Style TargetType="StackPanel">
+                            <Setter Property="Visibility" Value="Collapsed" />
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding TTSEngine}" Value="Google">
+                                    <Setter Property="Visibility" Value="Visible" />
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </StackPanel.Style>
+                    <ui:PasswordBox Margin="0,0,0,5" PlaceholderText="API Key" PasswordChar="*" Text="{Binding GoogleTTSConfig.ApiKey, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                    <StackPanel Orientation="Horizontal" Margin="0,0,0,5">
+                        <ui:TextBox Width="200" Margin="0,0,10,0" PlaceholderText="Voice Name (en-US-Wavenet-D)" Text="{Binding GoogleTTSConfig.VoiceName, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                        <ui:TextBox Width="150" PlaceholderText="Language Code (en-US)" Text="{Binding GoogleTTSConfig.LanguageCode, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                    </StackPanel>
+                </StackPanel>
+            </StackPanel>
+        </ui:CardExpander>
     </Grid>
 </Page>

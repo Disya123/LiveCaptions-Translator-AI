@@ -23,6 +23,7 @@ namespace LiveCaptionsTranslator
         private static readonly Queue<string> pendingTextQueue = new();
         private static readonly TranslationTaskQueue _translationTaskQueue = new();
         public static TranslationTaskQueue TranslationTaskQueue => _translationTaskQueue;
+        public static readonly TTSPlayer TTS = new TTSPlayer();
 
         private static readonly List<string> translatedSentences = new();
         private static readonly List<string> stableBuffer = new();
@@ -281,6 +282,8 @@ namespace LiveCaptionsTranslator
 
         public static async Task DisplayLoop()
         {
+            string lastTtsEnqueuedText = string.Empty;
+
             // Subscribe to streaming start event (to reset Caption state)
             _translationTaskQueue.StreamingStarted += () =>
             {
@@ -329,7 +332,15 @@ namespace LiveCaptionsTranslator
 
                 // If the original sentence is a complete sentence, choke for better visual experience.
                 if (isChoke)
+                {
+                    if (translatedText != lastTtsEnqueuedText && !translatedText.Contains("[ERROR]") && !translatedText.Contains("[WARNING]"))
+                    {
+                        lastTtsEnqueuedText = translatedText;
+                        string cleanText = RegexPatterns.NoticePrefix().Replace(translatedText, string.Empty).Trim();
+                        TTS.Enqueue(cleanText);
+                    }
                     Thread.Sleep(720);
+                }
                 Thread.Sleep(40);
             }
         }

@@ -33,6 +33,10 @@ namespace LiveCaptionsTranslator.models
         private Dictionary<string, List<TranslateAPIConfig>> configs;
         private Dictionary<string, int> configIndices;
 
+        private string ttsEngine = "None";
+        private OpenAITTSConfig openAITTSConfig = new OpenAITTSConfig();
+        private GoogleTTSConfig googleTTSConfig = new GoogleTTSConfig();
+
         public int MaxIdleInterval => maxIdleInterval;
         public int MaxSyncInterval
         {
@@ -153,6 +157,36 @@ namespace LiveCaptionsTranslator.models
             {
                 configIndices = value;
                 OnPropertyChanged("ConfigIndices");
+            }
+        }
+
+        public string TTSEngine
+        {
+            get => ttsEngine;
+            set
+            {
+                ttsEngine = value;
+                OnPropertyChanged("TTSEngine");
+            }
+        }
+
+        public OpenAITTSConfig OpenAITTSConfig
+        {
+            get => openAITTSConfig;
+            set
+            {
+                openAITTSConfig = value;
+                OnPropertyChanged("OpenAITTSConfig");
+            }
+        }
+
+        public GoogleTTSConfig GoogleTTSConfig
+        {
+            get => googleTTSConfig;
+            set
+            {
+                googleTTSConfig = value;
+                OnPropertyChanged("GoogleTTSConfig");
             }
         }
 

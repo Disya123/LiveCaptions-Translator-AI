@@ -412,6 +412,19 @@ namespace LiveCaptionsTranslator
             ControlPanel.Visibility = Visibility.Collapsed;
         }
 
+        private void TTSMuteButton_Click(object sender, RoutedEventArgs e)
+        {
+            if (Translator.TTS != null)
+            {
+                Translator.TTS.IsMuted = !Translator.TTS.IsMuted;
+                TTSMuteButton.Icon = new Wpf.Ui.Controls.SymbolIcon
+                {
+                    Symbol = Translator.TTS.IsMuted ? Wpf.Ui.Controls.SymbolRegular.Speaker024 : Wpf.Ui.Controls.SymbolRegular.Speaker224,
+                    Filled = false
+                };
+            }
+        }
+
         public void ResizeForOnlyMode()
         {
             if (onlyMode == CaptionVisible.TranslationOnly)
