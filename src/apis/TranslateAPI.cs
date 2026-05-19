@@ -59,8 +59,7 @@ namespace LiveCaptionsTranslator.apis
 
             var messages = new List<BaseLLMConfig.Message>
             {
-                new BaseLLMConfig.Message { role = "system", content = string.Format(Prompt, language) },
-                new BaseLLMConfig.Message { role = "user", content = $"🔤 {text} 🔤" }
+                new BaseLLMConfig.Message { role = "system", content = string.Format(Prompt, language) }
             };
 
             if (Translator.Setting.ContextAware)
@@ -72,12 +71,12 @@ namespace LiveCaptionsTranslator.apis
                         continue;
                     translatedText = RegexPatterns.NoticePrefix().Replace(translatedText, "");
 
-                    messages.InsertRange(1, [
-                        new BaseLLMConfig.Message { role = "user", content = $"🔤 {entry.SourceText} 🔤" },
-                        new BaseLLMConfig.Message { role = "assistant", content = $"{translatedText}" }
-                    ]);
+                    messages.Add(new BaseLLMConfig.Message { role = "user", content = $"🔤 {entry.SourceText} 🔤" });
+                    messages.Add(new BaseLLMConfig.Message { role = "assistant", content = $"{translatedText}" });
                 }
             }
+
+            messages.Add(new BaseLLMConfig.Message { role = "user", content = $"🔤 {text} 🔤" });
 
             client.DefaultRequestHeaders.Clear();
             client.DefaultRequestHeaders.Add("Authorization", $"Bearer {config.ApiKey}");
@@ -138,8 +137,7 @@ namespace LiveCaptionsTranslator.apis
 
             var messages = new List<BaseLLMConfig.Message>
             {
-                new BaseLLMConfig.Message { role = "system", content = string.Format(Prompt, language) },
-                new BaseLLMConfig.Message { role = "user", content = $"🔤 {text} 🔤" }
+                new BaseLLMConfig.Message { role = "system", content = string.Format(Prompt, language) }
             };
 
             if (Translator.Setting.ContextAware)
@@ -151,12 +149,12 @@ namespace LiveCaptionsTranslator.apis
                         continue;
                     translatedText = RegexPatterns.NoticePrefix().Replace(translatedText, "");
 
-                    messages.InsertRange(1, [
-                        new BaseLLMConfig.Message { role = "user", content = $"🔤 {entry.SourceText} 🔤" },
-                        new BaseLLMConfig.Message { role = "assistant", content = $"{translatedText}" }
-                    ]);
+                    messages.Add(new BaseLLMConfig.Message { role = "user", content = $"🔤 {entry.SourceText} 🔤" });
+                    messages.Add(new BaseLLMConfig.Message { role = "assistant", content = $"{translatedText}" });
                 }
             }
+
+            messages.Add(new BaseLLMConfig.Message { role = "user", content = $"🔤 {text} 🔤" });
             
             var requestData = LLMRequestDataFactory.Create("Ollama", config.ModelName, messages, config.Temperature);
             requestData.keep_alive = config.keep_alive;
@@ -287,8 +285,7 @@ namespace LiveCaptionsTranslator.apis
 
             var messages = new List<BaseLLMConfig.Message>
             {
-                new BaseLLMConfig.Message { role = "system", content = string.Format(Prompt, language) },
-                new BaseLLMConfig.Message { role = "user", content = $"🔤 {text} 🔤" }
+                new BaseLLMConfig.Message { role = "system", content = string.Format(Prompt, language) }
             };
 
             if (Translator.Setting.ContextAware)
@@ -300,12 +297,12 @@ namespace LiveCaptionsTranslator.apis
                         continue;
                     translatedText = RegexPatterns.NoticePrefix().Replace(translatedText, "");
 
-                    messages.InsertRange(1, [
-                        new BaseLLMConfig.Message { role = "user", content = $"🔤 {entry.SourceText} 🔤" },
-                        new BaseLLMConfig.Message { role = "assistant", content = $"{translatedText}" }
-                    ]);
+                    messages.Add(new BaseLLMConfig.Message { role = "user", content = $"🔤 {entry.SourceText} 🔤" });
+                    messages.Add(new BaseLLMConfig.Message { role = "assistant", content = $"{translatedText}" });
                 }
             }
+
+            messages.Add(new BaseLLMConfig.Message { role = "user", content = $"🔤 {text} 🔤" });
 
             var requestData = LLMRequestDataFactory.Create("OpenRouter", config.ModelName, messages, config.Temperature);
 

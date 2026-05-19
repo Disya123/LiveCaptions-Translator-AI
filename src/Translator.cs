@@ -1,6 +1,11 @@
-﻿using System.Diagnostics;
+using System;
+using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
+using System.Linq;
 using System.Text;
+using System.Threading;
+using System.Threading.Tasks;
 using System.Windows.Automation;
 
 using LiveCaptionsTranslator.apis;
@@ -17,6 +22,11 @@ namespace LiveCaptionsTranslator
 
         private static readonly Queue<string> pendingTextQueue = new();
         private static readonly TranslationTaskQueue translationTaskQueue = new();
+
+        private static readonly List<string> translatedSentences = new();
+        private static readonly List<string> stableBuffer = new();
+        private static string lastRawText = string.Empty;
+        private static DateTime lastChangeTime = DateTime.MinValue;
 
         public static AutomationElement? Window
         {
@@ -46,9 +56,6 @@ namespace LiveCaptionsTranslator
 
         public static void SyncLoop()
         {
-            int idleCount = 0;
-            int syncCount = 0;
-
             while (true)
             {
                 if (Window == null)
@@ -69,6 +76,9 @@ namespace LiveCaptionsTranslator
                 catch (ElementNotAvailableException)
                 {
                     Window = null;
+                    translatedSentences.Clear();
+                    stableBuffer.Clear();
+                    lastRawText = string.Empty;
                     continue;
                 }
                 if (string.IsNullOrEmpty(fullText))
@@ -79,82 +89,143 @@ namespace LiveCaptionsTranslator
                 fullText = RegexPatterns.AcronymWithWords().Replace(fullText, "$1 $2");
                 fullText = RegexPatterns.PunctuationSpace().Replace(fullText, "$1 ");
                 fullText = RegexPatterns.CJPunctuationSpace().Replace(fullText, "$1");
-                // Note: For certain languages (such as Japanese), LiveCaptions excessively uses `\n`.
-                // Replace redundant `\n` within sentences with comma or period.
                 fullText = TextUtil.ReplaceNewlines(fullText, TextUtil.MEDIUM_THRESHOLD);
 
-                // Prevent adding the last sentence from previous running to log cards
-                // before the first sentence is completed.
-                if (fullText.IndexOfAny(TextUtil.PUNC_EOS) == -1 && Caption.Contexts.Count > 0)
-                    ClearContexts();
-
-                // Get the last sentence.
-                int lastEOSIndex;
-                if (Array.IndexOf(TextUtil.PUNC_EOS, fullText[^1]) != -1)
-                    lastEOSIndex = fullText[0..^1].LastIndexOfAny(TextUtil.PUNC_EOS);
-                else
-                    lastEOSIndex = fullText.LastIndexOfAny(TextUtil.PUNC_EOS);
-                string latestCaption = fullText.Substring(lastEOSIndex + 1);
-
-                // If the last sentence is too short, extend it by adding the previous sentence.
-                // Note: LiveCaptions may generate multiple characters including EOS at once.
-                if (lastEOSIndex > 0 && Encoding.UTF8.GetByteCount(latestCaption) < TextUtil.SHORT_THRESHOLD)
+                // Detect changes
+                if (string.CompareOrdinal(fullText, lastRawText) != 0)
                 {
-                    lastEOSIndex = fullText[0..lastEOSIndex].LastIndexOfAny(TextUtil.PUNC_EOS);
-                    latestCaption = fullText.Substring(lastEOSIndex + 1);
+                    lastRawText = fullText;
+                    lastChangeTime = DateTime.Now;
                 }
 
-                // `OverlayOriginalCaption`: The sentence to be displayed on Overlay Window.
-                Caption.OverlayOriginalCaption = latestCaption;
-                for (int historyCount = Math.Min(Setting.DisplaySentences, Caption.Contexts.Count);
-                     historyCount > 0 && lastEOSIndex > 0;
-                     historyCount--)
+                var currentSentences = TextUtil.GetSentences(fullText);
+                if (currentSentences.Count == 0)
                 {
-                    lastEOSIndex = fullText[0..lastEOSIndex].LastIndexOfAny(TextUtil.PUNC_EOS);
-                    Caption.OverlayOriginalCaption = fullText.Substring(lastEOSIndex + 1);
+                    Thread.Sleep(25);
+                    continue;
                 }
 
-                // `DisplayOriginalCaption`: The sentence to be displayed on Main Window.
+                // Update real-time display of original captions
+                string latestCaption = currentSentences[^1];
                 if (string.CompareOrdinal(Caption.DisplayOriginalCaption, latestCaption) != 0)
                 {
                     Caption.DisplayOriginalCaption = latestCaption;
-                    // If the last sentence is too long, truncate it when displayed.
                     Caption.DisplayOriginalCaption =
                         TextUtil.ShortenDisplaySentence(Caption.DisplayOriginalCaption, TextUtil.VERYLONG_THRESHOLD);
                 }
 
-                // Prepare for `OriginalCaption`. If Expanded, only retain the complete sentence.
-                int lastEOS = latestCaption.LastIndexOfAny(TextUtil.PUNC_EOS);
-                if (lastEOS != -1)
-                    latestCaption = latestCaption.Substring(0, lastEOS + 1);
-                // `OriginalCaption`: The sentence to be really translated.
-                if (string.CompareOrdinal(Caption.OriginalCaption, latestCaption) != 0)
-                {
-                    Caption.OriginalCaption = latestCaption;
+                // Update Overlay original text showing recent sentences
+                int displayCount = Math.Min(Setting.DisplaySentences + 1, currentSentences.Count);
+                var displaySentences = currentSentences.Skip(currentSentences.Count - displayCount);
+                Caption.OverlayOriginalCaption = TextUtil.JoinSentences(displaySentences);
 
-                    idleCount = 0;
-                    if (Array.IndexOf(TextUtil.PUNC_EOS, Caption.OriginalCaption[^1]) != -1)
-                    {
-                        syncCount = 0;
-                        pendingTextQueue.Enqueue(Caption.OriginalCaption);
-                    }
-                    else if (Encoding.UTF8.GetByteCount(Caption.OriginalCaption) >= TextUtil.SHORT_THRESHOLD)
-                        syncCount++;
+                // Align currentSentences with translatedSentences to find new unprocessed sentences
+                // First, remove trailing incomplete sentence from translatedSentences if it exists
+                if (translatedSentences.Count > 0 && Array.IndexOf(TextUtil.PUNC_EOS, translatedSentences[^1][^1]) == -1)
+                {
+                    translatedSentences.RemoveAt(translatedSentences.Count - 1);
                 }
-                else
-                    idleCount++;
 
-                // `TranslateFlag` determines whether this sentence should be translated.
-                // When `OriginalCaption` remains unchanged, `idleCount` +1; when `OriginalCaption` changes, `MaxSyncInterval` +1.
-                if (syncCount > Setting.MaxSyncInterval ||
-                    idleCount == Setting.MaxIdleInterval)
+                int k = GetUnprocessedIndex(currentSentences, translatedSentences);
+                var unprocessedSentences = currentSentences.Skip(k).ToList();
+
+                TimeSpan idleTime = DateTime.Now - lastChangeTime;
+
+                foreach (var s in unprocessedSentences)
                 {
-                    syncCount = 0;
-                    pendingTextQueue.Enqueue(Caption.OriginalCaption);
+                    bool isLast = (s == currentSentences[^1]);
+                    bool isStable = false;
+
+                    if (!isLast)
+                    {
+                        // Not the last sentence -> 100% stable
+                        isStable = true;
+                    }
+                    else
+                    {
+                        // It is the last sentence.
+                        bool endsWithEos = Array.IndexOf(TextUtil.PUNC_EOS, s[^1]) != -1;
+                        if (endsWithEos)
+                        {
+                            // Ends with EOS, wait for 1.5s pause
+                            if (idleTime.TotalSeconds >= 1.5)
+                                isStable = true;
+                        }
+                        else
+                        {
+                            // Incomplete, wait for 2.0s pause
+                            if (idleTime.TotalSeconds >= 2.0)
+                                isStable = true;
+                        }
+                    }
+
+                    if (isStable)
+                    {
+                        stableBuffer.Add(s);
+                        translatedSentences.Add(s);
+                    }
+                }
+
+                // Prune translatedSentences to keep memory footprint and lookup times minimal
+                if (translatedSentences.Count > 50)
+                {
+                    translatedSentences.RemoveRange(0, translatedSentences.Count - 50);
+                }
+
+                // Trigger translation if we accumulated 3 sentences or speech paused for 1.5s
+                if (stableBuffer.Count >= 3 || (stableBuffer.Count > 0 && idleTime.TotalSeconds >= 1.5))
+                {
+                    string paragraph = TextUtil.JoinSentences(stableBuffer);
+                    pendingTextQueue.Enqueue(paragraph);
+                    stableBuffer.Clear();
                 }
 
                 Thread.Sleep(25);
             }
+        }
+
+        private static int GetUnprocessedIndex(List<string> currentSentences, List<string> translatedSentences)
+        {
+            // 1. Try strict suffix matching first (handles repetitions and ordering perfectly)
+            for (int i = currentSentences.Count; i > 0; i--)
+            {
+                if (MatchesSuffix(currentSentences, i, translatedSentences))
+                {
+                    return i;
+                }
+            }
+
+            // 2. Fallback to individual sentence matching if strict suffix match fails
+            // (handles rewinds, offsets, and minor corrections gracefully)
+            for (int i = currentSentences.Count - 1; i >= 0; i--)
+            {
+                string cur = currentSentences[i].Trim();
+                for (int j = translatedSentences.Count - 1; j >= 0; j--)
+                {
+                    string hist = translatedSentences[j].Trim();
+                    if (string.CompareOrdinal(cur, hist) == 0 || TextUtil.Similarity(cur, hist) >= 0.9)
+                    {
+                        return i + 1;
+                    }
+                }
+            }
+
+            return 0;
+        }
+
+        private static bool MatchesSuffix(List<string> currentSentences, int count, List<string> translatedSentences)
+        {
+            if (translatedSentences.Count < count)
+                return false;
+
+            for (int i = 0; i < count; i++)
+            {
+                string cur = currentSentences[i].Trim();
+                string hist = translatedSentences[translatedSentences.Count - count + i].Trim();
+                if (string.CompareOrdinal(cur, hist) != 0 && TextUtil.Similarity(cur, hist) < 0.9)
+                    return false;
+            }
+            return true;
         }
 
         public static async Task TranslateLoop()
@@ -241,8 +312,18 @@ namespace LiveCaptionsTranslator
 
                 if (Setting.ContextAware && !TranslateAPI.IsLLMBased)
                 {
-                    translatedText = await TranslateAPI.TranslateFunction($"{Caption.AwareContextsCaption} 🔤 {text} 🔤", token);
-                    translatedText = RegexPatterns.TargetSentence().Match(translatedText).Groups[1].Value;
+                    string rawTranslation = await TranslateAPI.TranslateFunction($"{Caption.AwareContextsCaption} 🔤 {text} 🔤", token);
+                    var parts = rawTranslation.Split("🔤", StringSplitOptions.RemoveEmptyEntries);
+                    if (parts.Length >= 2)
+                    {
+                        translatedText = parts[^1].Trim();
+                    }
+                    else
+                    {
+                        // Fallback: translate the target paragraph directly without context if delimiters are missing or mangled
+                        translatedText = await TranslateAPI.TranslateFunction(text, token);
+                    }
+                    translatedText = translatedText.Replace("🔤", "");
                 }
                 else
                 {
@@ -337,6 +418,9 @@ namespace LiveCaptionsTranslator
         public static void ClearContexts()
         {
             Caption?.Contexts.Clear();
+            translatedSentences.Clear();
+            stableBuffer.Clear();
+            lastRawText = string.Empty;
 
             Caption?.OnPropertyChanged("DisplayLogCards");
             Caption?.OnPropertyChanged("OverlayPreviousTranslation");

@@ -1,4 +1,6 @@
-﻿using System.Text;
+using System;
+using System.Collections.Generic;
+using System.Text;
 
 namespace LiveCaptionsTranslator.utils
 {
@@ -110,6 +112,61 @@ namespace LiveCaptionsTranslator.utils
             rest = rest.TrimEnd('/');
 
             return protocol + rest;
+        }
+
+        public static List<string> GetSentences(string text)
+        {
+            var rawList = new List<string>();
+            if (string.IsNullOrEmpty(text))
+                return rawList;
+
+            int start = 0;
+            for (int i = 0; i < text.Length; i++)
+            {
+                if (Array.IndexOf(PUNC_EOS, text[i]) != -1)
+                {
+                    string sentence = text.Substring(start, i - start + 1);
+                    rawList.Add(sentence);
+                    start = i + 1;
+                }
+            }
+            if (start < text.Length)
+            {
+                string trailing = text.Substring(start);
+                if (!string.IsNullOrWhiteSpace(trailing))
+                    rawList.Add(trailing);
+            }
+
+            // Merge short sentences into the previous ones
+            var mergedList = new List<string>();
+            foreach (var s in rawList)
+            {
+                if (mergedList.Count > 0 && Encoding.UTF8.GetByteCount(s) < SHORT_THRESHOLD)
+                {
+                    mergedList[^1] += s;
+                }
+                else
+                {
+                    mergedList.Add(s);
+                }
+            }
+            return mergedList;
+        }
+
+        public static string JoinSentences(IEnumerable<string> sentences)
+        {
+            var sb = new StringBuilder();
+            foreach (var s in sentences)
+            {
+                if (sb.Length > 0)
+                {
+                    char lastChar = sb[sb.Length - 1];
+                    if (!isCJChar(lastChar))
+                        sb.Append(' ');
+                }
+                sb.Append(s);
+            }
+            return sb.ToString();
         }
     }
 }
