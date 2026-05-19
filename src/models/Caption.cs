@@ -1,6 +1,11 @@
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
 using System.Text;
+using System.Collections.ObjectModel;
+using System.Windows;
+using System.Windows.Media;
+using System.Windows.Media.Animation;
+using System.Threading.Tasks;
 
 using LiveCaptionsTranslator.utils;
 
@@ -79,6 +84,118 @@ namespace LiveCaptionsTranslator.models
 
         public string OverlayPreviousTranslation =>
             GetPreviousText(Translator.Setting.DisplaySentences, TextType.Translation);
+
+        private SubtitleBlock? currentActiveSubtitleBlock = null;
+
+        public ObservableCollection<SubtitleBlock> ActiveSubtitles { get; } = new();
+
+        public double TranslationFontSize => Translator.Setting.OverlayWindow.FontSize * 1.25;
+        public double TranslationFontStroke => Translator.Setting.OverlayWindow.FontStroke;
+        public FontWeight TranslationFontWeight => Translator.Setting.OverlayWindow.FontBold >= LiveCaptionsTranslator.Utils.FontBold.TranslationOnly ? FontWeights.Bold : FontWeights.Regular;
+
+        public void NotifyTranslationStyleChanged()
+        {
+            OnPropertyChanged(nameof(TranslationFontSize));
+            OnPropertyChanged(nameof(TranslationFontStroke));
+            OnPropertyChanged(nameof(TranslationFontWeight));
+        }
+
+        public void StartNewSubtitleBlock(Color highlightColor, Brush baseBrush)
+        {
+            App.Current?.Dispatcher.Invoke(() =>
+            {
+                var blockToFade = currentActiveSubtitleBlock;
+                if (blockToFade != null)
+                {
+                    blockToFade.IsFadingOut = true;
+                    _ = Task.Delay(2000).ContinueWith(_ =>
+                    {
+                        try
+                        {
+                            App.Current?.Dispatcher.Invoke(() =>
+                            {
+                                ActiveSubtitles.Remove(blockToFade);
+                            });
+                        }
+                        catch {}
+                    });
+                }
+
+                currentActiveSubtitleBlock = new SubtitleBlock();
+                
+                // Initialize block foreground with highlight color and animate to base color
+                var brush = new SolidColorBrush(highlightColor);
+                currentActiveSubtitleBlock.Foreground = brush;
+                
+                ActiveSubtitles.Add(currentActiveSubtitleBlock);
+
+                // Start transition to base translation color
+                var targetColor = Colors.White;
+                if (baseBrush is SolidColorBrush solidBaseBrush)
+                {
+                    targetColor = solidBaseBrush.Color;
+                }
+                
+                var colorAnim = new ColorAnimation
+                {
+                    From = highlightColor,
+                    To = targetColor,
+                    Duration = new Duration(TimeSpan.FromSeconds(1.5)),
+                    EasingFunction = new QuadraticEase { EasingMode = EasingMode.EaseOut }
+                };
+                brush.BeginAnimation(SolidColorBrush.ColorProperty, colorAnim);
+            });
+        }
+
+        public void UpdateCurrentSubtitleBlock(string text)
+        {
+            App.Current?.Dispatcher.Invoke(() =>
+            {
+                if (currentActiveSubtitleBlock == null)
+                {
+                    var baseBrush = OverlayWindow.ColorMap[Translator.Setting.OverlayWindow.FontColor];
+                    StartNewSubtitleBlock(Color.FromRgb(255, 165, 0), baseBrush);
+                }
+                if (currentActiveSubtitleBlock != null)
+                {
+                    currentActiveSubtitleBlock.Text = text;
+                }
+            });
+        }
+
+        public void ClearCurrentSubtitleBlockText()
+        {
+            App.Current?.Dispatcher.Invoke(() =>
+            {
+                if (currentActiveSubtitleBlock != null)
+                {
+                    currentActiveSubtitleBlock.Text = string.Empty;
+                }
+            });
+        }
+
+        public void UpdateAllActiveSubtitlesBrush(Brush brush)
+        {
+            App.Current?.Dispatcher.Invoke(() =>
+            {
+                foreach (var block in ActiveSubtitles)
+                {
+                    if (!block.IsFadingOut)
+                    {
+                        block.Foreground = brush;
+                    }
+                }
+            });
+        }
+
+        public void ClearActiveSubtitles()
+        {
+            App.Current?.Dispatcher.Invoke(() =>
+            {
+                ActiveSubtitles.Clear();
+                currentActiveSubtitleBlock = null;
+            });
+        }
 
         private Caption()
         {

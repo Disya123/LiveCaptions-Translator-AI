@@ -54,22 +54,56 @@ namespace LiveCaptionsTranslator.models
                 try
                 {
                     (string, bool) result;
+                    bool isOverwrite = await Translator.IsOverwrite(currentTask.OriginalText);
 
                     if (currentTask is StreamingTranslationTask streamingTask)
                     {
+                        System.Windows.Application.Current?.Dispatcher.Invoke(() =>
+                        {
+                            var baseBrush = OverlayWindow.ColorMap[Translator.Setting.OverlayWindow.FontColor];
+                            var highlightColor = System.Windows.Media.Color.FromRgb(255, 165, 0);
+
+                            if (!isOverwrite)
+                            {
+                                Translator.Caption.StartNewSubtitleBlock(highlightColor, baseBrush);
+                            }
+                            else
+                            {
+                                Translator.Caption.ClearCurrentSubtitleBlockText();
+                            }
+                        });
+
                         StreamingStarted?.Invoke();
                         result = await streamingTask.ExecuteAsync(chunk => ChunkReceived?.Invoke(chunk));
                     }
                     else if (currentTask is StandardTranslationTask standardTask)
                     {
                         result = await standardTask.ExecuteAsync();
+
+                        System.Windows.Application.Current?.Dispatcher.Invoke(() =>
+                        {
+                            var baseBrush = OverlayWindow.ColorMap[Translator.Setting.OverlayWindow.FontColor];
+                            var highlightColor = System.Windows.Media.Color.FromRgb(255, 165, 0);
+
+                            if (!isOverwrite)
+                            {
+                                Translator.Caption.StartNewSubtitleBlock(highlightColor, baseBrush);
+                            }
+
+                            string textToUpdate = result.Item1;
+                            if (!textToUpdate.Contains("[ERROR]") && !textToUpdate.Contains("[WARNING]"))
+                            {
+                                var match = LiveCaptionsTranslator.utils.RegexPatterns.NoticePrefixAndTranslation().Match(textToUpdate);
+                                textToUpdate = match.Groups[2].Value.Trim();
+                            }
+                            Translator.Caption.UpdateCurrentSubtitleBlock(textToUpdate);
+                        });
                     }
                     else continue;
 
                     output = result;
 
                     // Log after translation.
-                    bool isOverwrite = await Translator.IsOverwrite(currentTask.OriginalText);
                     if (!isOverwrite)
                         await Translator.AddContexts();
                     await Translator.Log(currentTask.OriginalText, result.Item1, isOverwrite);
@@ -80,7 +114,9 @@ namespace LiveCaptionsTranslator.models
                 }
                 catch (Exception ex)
                 {
-                    output = ($"[ERROR] Translation Failed: {ex.Message}", false);
+                    string errMsg = $"[ERROR] Translation Failed: {ex.Message}";
+                    output = (errMsg, false);
+                    Translator.Caption.UpdateCurrentSubtitleBlock(errMsg);
                 }
             }
         }

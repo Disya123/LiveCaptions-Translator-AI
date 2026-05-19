@@ -1,4 +1,4 @@
-﻿<Window
+<Window
     x:Class="LiveCaptionsTranslator.OverlayWindow"
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
@@ -58,19 +58,53 @@
                     VerticalAlignment="Top"
                     Background="Transparent"
                     BorderThickness="0">
-                    <local:StrokeDecorator
-                        x:Name="TranslatedCaptionDecorator"
-                        Stroke="Black"
-                        StrokeThickness="0">
-                        <TextBlock
+                    <StackPanel Orientation="Vertical">
+                        <local:StrokeDecorator
+                            x:Name="NoticePrefixDecorator"
+                            Stroke="Black"
+                            StrokeThickness="0">
+                            <TextBlock
+                                x:Name="NoticePrefixText"
+                                Text="{Binding OverlayNoticePrefix, UpdateSourceTrigger=PropertyChanged}"
+                                FontFamily="Consolas"
+                                FontSize="18"
+                                Style="{StaticResource CaptionBlockStyle}" />
+                        </local:StrokeDecorator>
+                        <ItemsControl
                             x:Name="TranslatedCaption"
-                            FontSize="18"
-                            Style="{StaticResource CaptionBlockStyle}">
-                            <Run x:Name="NoticePrefixRun" Text="{Binding OverlayNoticePrefix, UpdateSourceTrigger=PropertyChanged}" FontFamily="Consolas" />
-                            <Run x:Name="PreviousTranslationRun" Text="{Binding OverlayPreviousTranslation, Mode=OneWay}" />
-                            <Run x:Name="CurrentTranslationRun" Text="{Binding OverlayCurrentTranslation, UpdateSourceTrigger=PropertyChanged}" />
-                        </TextBlock>
-                    </local:StrokeDecorator>
+                            ItemsSource="{Binding ActiveSubtitles}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <local:StrokeDecorator 
+                                        Stroke="Black" 
+                                        StrokeThickness="{Binding StrokeThickness, ElementName=OriginalCaptionDecorator}">
+                                        <TextBlock Text="{Binding Text}" 
+                                                   Foreground="{Binding Foreground}">
+                                            <TextBlock.Style>
+                                                <Style TargetType="TextBlock" BasedOn="{StaticResource CaptionBlockStyle}">
+                                                    <Setter Property="Opacity" Value="1.0"/>
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding IsFadingOut}" Value="True">
+                                                            <DataTrigger.EnterActions>
+                                                                <BeginStoryboard>
+                                                                    <Storyboard>
+                                                                        <DoubleAnimation Storyboard.TargetProperty="Opacity"
+                                                                                         To="0.0" 
+                                                                                         Duration="0:0:1.5" 
+                                                                                         FillBehavior="HoldEnd"/>
+                                                                    </Storyboard>
+                                                                </BeginStoryboard>
+                                                            </DataTrigger.EnterActions>
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </TextBlock.Style>
+                                        </TextBlock>
+                                    </local:StrokeDecorator>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </StackPanel>
                 </ui:Card>
                 <ui:Card
                     x:Name="OriginalCaptionCard"

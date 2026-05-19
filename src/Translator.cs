@@ -479,6 +479,8 @@ namespace LiveCaptionsTranslator
             stableBuffer.Clear();
             lastRawText = string.Empty;
 
+            Caption?.ClearActiveSubtitles();
+
             Caption?.OnPropertyChanged("DisplayLogCards");
             Caption?.OnPropertyChanged("OverlayPreviousTranslation");
         }

@@ -20,7 +20,7 @@ namespace LiveCaptionsTranslator
 {
     public partial class OverlayWindow : Window
     {
-        private readonly Dictionary<ColorEnum, SolidColorBrush> colorMap = new()
+        public static readonly Dictionary<ColorEnum, SolidColorBrush> ColorMap = new()
         {
             {ColorEnum.White, Brushes.White},
             {ColorEnum.Yellow, Brushes.Yellow},
@@ -31,6 +31,7 @@ namespace LiveCaptionsTranslator
             {ColorEnum.Red, Brushes.Red},
             {ColorEnum.Black, Brushes.Black},
         };
+        private readonly Dictionary<ColorEnum, SolidColorBrush> colorMap = ColorMap;
         private CaptionVisible onlyMode = CaptionVisible.Both;
 
         // Streaming character queue and typewriter timer
@@ -39,8 +40,6 @@ namespace LiveCaptionsTranslator
         private readonly object _chunkLock = new();
 
         // Color animation for new translation text
-        private ColorAnimation? _colorTransitionAnim;
-        private SolidColorBrush? _currentTranslationBrush;
         private Color _highlightColor = Color.FromRgb(255, 165, 0); // Orange highlight
         private Color _baseTranslationColor = Colors.White;
 
@@ -69,7 +68,8 @@ namespace LiveCaptionsTranslator
                 FontWeights.Bold : FontWeights.Regular;
 
             OriginalCaptionDecorator.StrokeThickness = Translator.Setting.OverlayWindow.FontStroke;
-            TranslatedCaptionDecorator.StrokeThickness = Translator.Setting.OverlayWindow.FontStroke;
+            if (NoticePrefixDecorator != null)
+                NoticePrefixDecorator.StrokeThickness = Translator.Setting.OverlayWindow.FontStroke;
 
             OriginalCaption.Foreground = colorMap[Translator.Setting.OverlayWindow.FontColor];
             UpdateTranslationColor(colorMap[Translator.Setting.OverlayWindow.FontColor]);
@@ -116,11 +116,6 @@ namespace LiveCaptionsTranslator
             {
                 _charQueue.Clear();
             }
-            Dispatcher.BeginInvoke(() =>
-            {
-                // Start color transition animation when new translation begins
-                StartColorTransition();
-            });
         }
 
         private void FlushChunkBuffer()
@@ -167,25 +162,12 @@ namespace LiveCaptionsTranslator
                     .Match(Translator.Caption.TranslatedCaption);
                 Translator.Caption.OverlayNoticePrefix = match.Groups[1].Value.Trim();
                 Translator.Caption.OverlayCurrentTranslation = match.Groups[2].Value.Trim();
+                Translator.Caption.UpdateCurrentSubtitleBlock(Translator.Caption.OverlayCurrentTranslation);
             }
-        }
-
-        private void StartColorTransition()
-        {
-            // Create an animatable brush for CurrentTranslationRun
-            _currentTranslationBrush = new SolidColorBrush(_highlightColor);
-            CurrentTranslationRun.Foreground = _currentTranslationBrush;
-
-            // Animate from highlight color to base translation color over 1.5 seconds
-            _colorTransitionAnim = new ColorAnimation
+            else
             {
-                From = _highlightColor,
-                To = _baseTranslationColor,
-                Duration = new Duration(TimeSpan.FromSeconds(1.5)),
-                EasingFunction = new QuadraticEase { EasingMode = EasingMode.EaseOut }
-            };
-
-            _currentTranslationBrush.BeginAnimation(SolidColorBrush.ColorProperty, _colorTransitionAnim);
+                Translator.Caption.UpdateCurrentSubtitleBlock(Translator.Caption.TranslatedCaption);
+            }
         }
 
         private void Border_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
@@ -467,7 +449,8 @@ namespace LiveCaptionsTranslator
         public void ApplyFontStroke()
         {
             OriginalCaptionDecorator.StrokeThickness = Translator.Setting.OverlayWindow.FontStroke;
-            TranslatedCaptionDecorator.StrokeThickness = Translator.Setting.OverlayWindow.FontStroke;
+            if (NoticePrefixDecorator != null)
+                NoticePrefixDecorator.StrokeThickness = Translator.Setting.OverlayWindow.FontStroke;
         }
 
         public void ApplyBackgroundOpacity()
@@ -486,14 +469,12 @@ namespace LiveCaptionsTranslator
             byte g = (byte)Math.Clamp(color.G + (target - color.G) * 0.4, 0, 255);
             byte b = (byte)Math.Clamp(color.B + (target - color.B) * 0.3, 0, 255);
 
-            NoticePrefixRun.Foreground = brush;
-            PreviousTranslationRun.Foreground = brush;
+            if (NoticePrefixText != null)
+                NoticePrefixText.Foreground = brush;
 
             _baseTranslationColor = Color.FromRgb(r, g, b);
 
             // Dynamically set highlight color for best contrast with the background/text color:
-            // If the base text is dark (light background), use vibrant dark blue highlight.
-            // If the base text is light (dark background), use vibrant orange/gold highlight.
             double brightness = 0.299 * _baseTranslationColor.R + 0.587 * _baseTranslationColor.G + 0.114 * _baseTranslationColor.B;
             if (brightness > 127)
             {
@@ -504,7 +485,10 @@ namespace LiveCaptionsTranslator
                 _highlightColor = Color.FromRgb(0, 120, 215); // Vibrant Blue
             }
 
-            CurrentTranslationRun.Foreground = new SolidColorBrush(_baseTranslationColor);
+            var baseBrush = new SolidColorBrush(_baseTranslationColor);
+            if (TranslatedCaption != null)
+                TranslatedCaption.Foreground = baseBrush;
+            Translator.Caption?.UpdateAllActiveSubtitlesBrush(baseBrush);
         }
     }
 }
