@@ -37,7 +37,8 @@ namespace LiveCaptionsTranslator
             sectionReferences = new Dictionary<string, FrameworkElement>
             {
                 { "General", ContentPanel },
-                { "Prompt", PromptSection }
+                { "Prompt", PromptSection },
+                { "TTS", FindName("TTSSection") as StackPanel }
             };
 
             foreach (var apiName in TranslateAPI.TRANSLATE_FUNCTIONS.Keys.Where(apiName =>
