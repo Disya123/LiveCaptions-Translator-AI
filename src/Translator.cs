@@ -92,7 +92,8 @@ namespace LiveCaptionsTranslator
                 fullText = TextUtil.ReplaceNewlines(fullText, TextUtil.MEDIUM_THRESHOLD);
 
                 // Detect changes
-                if (string.CompareOrdinal(fullText, lastRawText) != 0)
+                bool textChanged = string.CompareOrdinal(fullText, lastRawText) != 0;
+                if (textChanged)
                 {
                     lastRawText = fullText;
                     lastChangeTime = DateTime.Now;
@@ -120,8 +121,9 @@ namespace LiveCaptionsTranslator
                 Caption.OverlayOriginalCaption = TextUtil.JoinSentences(displaySentences);
 
                 // Align currentSentences with translatedSentences to find new unprocessed sentences
-                // First, remove trailing incomplete sentence from translatedSentences if it exists
-                if (translatedSentences.Count > 0 && Array.IndexOf(TextUtil.PUNC_EOS, translatedSentences[^1][^1]) == -1)
+                // First, remove trailing incomplete sentence from translatedSentences if it exists,
+                // but only if the text has actually changed to avoid infinite loop of re-adding during silence.
+                if (textChanged && translatedSentences.Count > 0 && Array.IndexOf(TextUtil.PUNC_EOS, translatedSentences[^1][^1]) == -1)
                 {
                     translatedSentences.RemoveAt(translatedSentences.Count - 1);
                 }
